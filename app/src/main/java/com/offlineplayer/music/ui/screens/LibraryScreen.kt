@@ -14,7 +14,9 @@ import com.offlineplayer.music.ui.util.formatDuration
 fun LibraryScreen(
     tracks: List<Track>,
     isLoading: Boolean,
-    hasQuery: Boolean
+    hasQuery: Boolean,
+    currentTrackId: Long?,
+    onTrackClick: (Track) -> Unit
 ) {
     when {
         tracks.isNotEmpty() -> LazyColumn(
@@ -24,7 +26,9 @@ fun LibraryScreen(
                 LibraryItem(
                     title = track.title,
                     subtitle = "${track.artist} • ${track.album}",
-                    trailing = formatDuration(track.durationMs)
+                    trailing = formatDuration(track.durationMs),
+                    isCurrent = track.id == currentTrackId,
+                    onClick = { onTrackClick(track) }
                 )
             }
         }

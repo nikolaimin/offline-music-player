@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.offlineplayer.music.data.MusicRepository
 import com.offlineplayer.music.data.Track
+import com.offlineplayer.music.playback.PlayerConnection
+import com.offlineplayer.music.playback.PlayerState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,11 +27,14 @@ data class LibraryUiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = MusicRepository(application.applicationContext)
+    private val playerConnection = PlayerConnection(application.applicationContext)
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
     private val isLoading = MutableStateFlow(false)
     private var loadJob: Job? = null
+
+    val playerState: StateFlow<PlayerState> = playerConnection.state
 
     val uiState: StateFlow<LibraryUiState> =
         combine(allTracks, query, isLoading) { all, q, loading ->
@@ -60,5 +65,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isLoading.value = false
             }
         }
+    }
+
+    /** Играет выбранный трек; очередью становится список, который сейчас на экране. */
+    fun playTrack(track: Track) {
+        val list = uiState.value.tracks
+        val index = list.indexOfFirst { it.id == track.id }
+        if (index >= 0) playerConnection.playTracks(list, index)
+    }
+
+    fun togglePlayPause() = playerConnection.togglePlayPause()
+
+    fun skipNext() = playerConnection.skipNext()
+
+    override fun onCleared() {
+        playerConnection.release()
+        super.onCleared()
     }
 }

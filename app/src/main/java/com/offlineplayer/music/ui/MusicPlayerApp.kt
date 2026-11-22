@@ -1,7 +1,10 @@
 package com.offlineplayer.music.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,11 +31,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.EmptyState
+import com.offlineplayer.music.ui.components.MiniPlayer
 import com.offlineplayer.music.ui.components.SearchField
 import com.offlineplayer.music.ui.screens.LibraryScreen
 import com.offlineplayer.music.ui.screens.PermissionScreen
@@ -51,10 +58,12 @@ private val tabs = listOf(
 fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val playerState by viewModel.playerState.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
     var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
+    var askedForNotifications by rememberSaveable { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -62,6 +71,10 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         hasPermission = granted
         if (granted) viewModel.loadTracks()
     }
+
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Музыка играет и без уведомления, результат не нужен. */ }
 
     // При каждом возвращении в приложение: перепроверяем доступ и обновляем библиотеку.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -74,17 +87,41 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         if (!hasAudioPermission(context)) permissionLauncher.launch(AudioPermission)
     }
 
+    val onTrackClick: (Track) -> Unit = { track ->
+        viewModel.playTrack(track)
+
+        // Android 13+: без этого разрешения уведомление с кнопками не покажется.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !askedForNotifications &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            askedForNotifications = true
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            NavigationBar(containerColor = CardColor) {
-                tabs.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        icon = { Text(tab.icon, fontSize = 20.sp) },
-                        label = { Text(tab.title) }
+            Column {
+                if (playerState.mediaId != null) {
+                    MiniPlayer(
+                        state = playerState,
+                        onTogglePlay = viewModel::togglePlayPause,
+                        onNext = viewModel::skipNext
                     )
+                }
+                NavigationBar(containerColor = CardColor) {
+                    tabs.forEachIndexed { index, tab ->
+                        NavigationBarItem(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            icon = { Text(tab.icon, fontSize = 20.sp) },
+                            label = { Text(tab.title) }
+                        )
+                    }
                 }
             }
         }
@@ -145,7 +182,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                     LibraryScreen(
                         tracks = uiState.tracks,
                         isLoading = uiState.isLoading,
-                        hasQuery = uiState.hasQuery
+                        hasQuery = uiState.hasQuery,
+                        currentTrackId = playerState.mediaId?.toLongOrNull(),
+                        onTrackClick = onTrackClick
                     )
                 } else {
                     PermissionScreen(

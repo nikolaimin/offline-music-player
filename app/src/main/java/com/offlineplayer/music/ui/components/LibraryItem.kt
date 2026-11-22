@@ -1,6 +1,7 @@
 package com.offlineplayer.music.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,12 +31,18 @@ fun LibraryItem(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
-    trailing: String? = null
+    trailing: String? = null,
+    isCurrent: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
+    val shape = RoundedCornerShape(16.dp)
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(CardColor, RoundedCornerShape(16.dp))
+            .clip(shape)
+            .background(CardColor)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -52,7 +60,7 @@ fun LibraryItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
-                color = Color.White,
+                color = if (isCurrent) Accent else Color.White,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 15.sp,
                 maxLines = 1,
