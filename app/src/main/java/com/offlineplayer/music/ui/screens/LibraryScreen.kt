@@ -5,24 +5,32 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
+import com.offlineplayer.music.data.Track
+import com.offlineplayer.music.ui.components.EmptyState
 import com.offlineplayer.music.ui.components.LibraryItem
-
-// Временные данные-заглушки. Будут заменены реальными треками из MediaStore.
-private val placeholders = listOf(
-    "Музыкальная библиотека" to "Ваши локальные композиции",
-    "Недавно добавленные" to "Новые треки",
-    "Исполнители" to "Все исполнители",
-    "Альбомы" to "Музыка по альбомам",
-    "Папки" to "Обзор файлов"
-)
+import com.offlineplayer.music.ui.util.formatDuration
 
 @Composable
-fun LibraryScreen() {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(placeholders) { (title, subtitle) ->
-            LibraryItem(title = title, subtitle = subtitle)
+fun LibraryScreen(
+    tracks: List<Track>,
+    isLoading: Boolean,
+    hasQuery: Boolean
+) {
+    when {
+        tracks.isNotEmpty() -> LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(tracks, key = { it.id }) { track ->
+                LibraryItem(
+                    title = track.title,
+                    subtitle = "${track.artist} • ${track.album}",
+                    trailing = formatDuration(track.durationMs)
+                )
+            }
         }
+
+        isLoading -> EmptyState("Загрузка библиотеки...")
+        hasQuery -> EmptyState("Ничего не найдено")
+        else -> EmptyState("Музыка на телефоне не найдена")
     }
 }

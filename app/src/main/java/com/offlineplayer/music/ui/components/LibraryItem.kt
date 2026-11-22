@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.offlineplayer.music.ui.theme.Accent
@@ -27,7 +28,8 @@ import com.offlineplayer.music.ui.theme.SecondaryText
 fun LibraryItem(
     title: String,
     subtitle: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trailing: String? = null
 ) {
     Row(
         modifier = modifier
@@ -47,18 +49,27 @@ fun LibraryItem(
 
         Spacer(modifier = Modifier.width(14.dp))
 
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 subtitle,
                 color = SecondaryText,
-                fontSize = 12.sp
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+        }
+
+        if (trailing != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(trailing, color = SecondaryText, fontSize = 12.sp)
         }
     }
 }
