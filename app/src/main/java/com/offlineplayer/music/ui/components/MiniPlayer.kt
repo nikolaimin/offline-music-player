@@ -58,6 +58,14 @@ fun MiniPlayer(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // Временная диагностика: состояние плеера и текст ошибки.
+            Text(
+                text = state.error ?: state.status,
+                color = if (state.error != null) Color(0xFFFF8A80) else SecondaryText,
+                fontSize = 10.sp,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
         }
 
         Box(

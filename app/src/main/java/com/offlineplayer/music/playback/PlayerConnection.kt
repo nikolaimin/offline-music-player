@@ -2,6 +2,7 @@ package com.offlineplayer.music.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -15,7 +16,9 @@ data class PlayerState(
     val mediaId: String? = null,
     val title: String = "",
     val artist: String = "",
-    val isPlaying: Boolean = false
+    val isPlaying: Boolean = false,
+    val status: String = "",
+    val error: String? = null
 )
 
 /**
@@ -68,7 +71,18 @@ class PlayerConnection(context: Context) {
             mediaId = item?.mediaId,
             title = item?.mediaMetadata?.title?.toString().orEmpty(),
             artist = item?.mediaMetadata?.artist?.toString().orEmpty(),
-            isPlaying = player.isPlaying
+            isPlaying = player.isPlaying,
+            status = when (player.playbackState) {
+                Player.STATE_IDLE -> "IDLE"
+                Player.STATE_BUFFERING -> "BUFFERING"
+                Player.STATE_READY -> "READY"
+                Player.STATE_ENDED -> "ENDED"
+                else -> "?"
+            },
+            error = player.playerError?.let {
+                Log.e("PlayerConnection", "Ошибка воспроизведения", it)
+                "${it.errorCodeName}: ${it.cause?.message ?: it.message}"
+            }
         )
     }
 
