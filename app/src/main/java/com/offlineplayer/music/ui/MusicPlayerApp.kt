@@ -45,6 +45,7 @@ import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.EmptyState
 import com.offlineplayer.music.ui.components.MiniPlayer
 import com.offlineplayer.music.ui.components.SearchField
+import com.offlineplayer.music.ui.components.SectionTitle
 import com.offlineplayer.music.ui.components.appBackground
 import com.offlineplayer.music.ui.screens.LibraryScreen
 import com.offlineplayer.music.ui.screens.NowPlayingScreen
@@ -180,24 +181,15 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                 }
             )
 
-            Spacer(modifier = Modifier.height(26.dp))
-
-            Text(
-                text = when (selectedTab) {
-                    0 -> if (hasPermission) "Ваша библиотека · ${uiState.totalCount}" else "Ваша библиотека"
-                    1 -> "Ваши подборки"
-                    else -> "Любимые композиции"
-                },
-                color = Color.White,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
+            // Отступ под поиском. Вместе с отступом внутри списка даёт прежний
+            // зазор до заголовка, а при прокрутке треки уходят под строку поиска.
+            Spacer(modifier = Modifier.height(16.dp))
 
             when (selectedTab) {
                 0 -> if (hasPermission) {
+                    // Заголовок «Ваша библиотека» лежит внутри списка и прокручивается с музыкой.
                     LibraryScreen(
+                        title = "Ваша библиотека · ${uiState.totalCount}",
                         tracks = uiState.tracks,
                         isLoading = uiState.isLoading,
                         hasQuery = uiState.hasQuery,
@@ -205,21 +197,36 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                         onTrackClick = onTrackClick
                     )
                 } else {
-                    PermissionScreen(
-                        onRequest = { permissionLauncher.launch(AudioPermission) },
-                        onOpenSettings = {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.fromParts("package", context.packageName, null)
+                    Column {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SectionTitle("Ваша библиотека")
+                        PermissionScreen(
+                            onRequest = { permissionLauncher.launch(AudioPermission) },
+                            onOpenSettings = {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        Uri.fromParts("package", context.packageName, null)
+                                    )
                                 )
-                            )
-                        }
-                    )
+                            }
+                        )
+                    }
                 }
 
-                1 -> EmptyState("Здесь будут ваши плейлисты")
-                else -> EmptyState("Добавляйте любимые композиции")
+                1 -> Column {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SectionTitle("Ваши подборки")
+                    Spacer(modifier = Modifier.height(14.dp))
+                    EmptyState("Здесь будут ваши плейлисты")
+                }
+
+                else -> Column {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SectionTitle("Любимые композиции")
+                    Spacer(modifier = Modifier.height(14.dp))
+                    EmptyState("Добавляйте любимые композиции")
+                }
             }
         }
     }
