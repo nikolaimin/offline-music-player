@@ -45,6 +45,7 @@ import com.offlineplayer.music.playback.PlayerState
 import com.offlineplayer.music.playback.QueueState
 import com.offlineplayer.music.ui.components.Artwork
 import com.offlineplayer.music.ui.components.LibraryItem
+import com.offlineplayer.music.ui.components.appBackground
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
 import com.offlineplayer.music.ui.theme.CardColor
@@ -87,6 +88,7 @@ fun NowPlayingScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            .appBackground()
             .systemBarsPadding()
             .padding(horizontal = 24.dp)
     ) {

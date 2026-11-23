@@ -45,6 +45,7 @@ import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.EmptyState
 import com.offlineplayer.music.ui.components.MiniPlayer
 import com.offlineplayer.music.ui.components.SearchField
+import com.offlineplayer.music.ui.components.appBackground
 import com.offlineplayer.music.ui.screens.LibraryScreen
 import com.offlineplayer.music.ui.screens.NowPlayingScreen
 import com.offlineplayer.music.ui.screens.PermissionScreen
@@ -146,6 +147,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .appBackground()
                 .padding(padding)
                 .padding(horizontal = 20.dp)
         ) {
