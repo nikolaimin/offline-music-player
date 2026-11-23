@@ -7,6 +7,7 @@ import com.offlineplayer.music.data.MusicRepository
 import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.playback.PlayerConnection
 import com.offlineplayer.music.playback.PlayerState
+import com.offlineplayer.music.playback.QueueState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var loadJob: Job? = null
 
     val playerState: StateFlow<PlayerState> = playerConnection.state
+    val queueState: StateFlow<QueueState> = playerConnection.queue
 
     val uiState: StateFlow<LibraryUiState> =
         combine(allTracks, query, isLoading) { all, q, loading ->
@@ -77,6 +79,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun togglePlayPause() = playerConnection.togglePlayPause()
 
     fun skipNext() = playerConnection.skipNext()
+
+    fun skipPrevious() = playerConnection.skipPrevious()
+
+    fun seekTo(positionMs: Long) = playerConnection.seekTo(positionMs)
+
+    fun positionMs(): Long = playerConnection.positionMs()
+
+    fun toggleShuffle() = playerConnection.toggleShuffle()
+
+    fun cycleRepeat() = playerConnection.cycleRepeat()
+
+    fun playQueueItem(index: Int) = playerConnection.playQueueItem(index)
 
     override fun onCleared() {
         playerConnection.release()

@@ -6,8 +6,13 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,6 +46,7 @@ import com.offlineplayer.music.ui.components.EmptyState
 import com.offlineplayer.music.ui.components.MiniPlayer
 import com.offlineplayer.music.ui.components.SearchField
 import com.offlineplayer.music.ui.screens.LibraryScreen
+import com.offlineplayer.music.ui.screens.NowPlayingScreen
 import com.offlineplayer.music.ui.screens.PermissionScreen
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
@@ -59,7 +65,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playerState by viewModel.playerState.collectAsStateWithLifecycle()
+    val queueState by viewModel.queueState.collectAsStateWithLifecycle()
 
+    var showPlayer by rememberSaveable { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
     var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
@@ -102,6 +110,13 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    val playerVisible = showPlayer && playerState.mediaId != null
+
+    // Кнопка «Назад» закрывает экран плеера, а не приложение.
+    BackHandler(enabled = playerVisible) { showPlayer = false }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+
     Scaffold(
         containerColor = Background,
         bottomBar = {
@@ -110,7 +125,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                     MiniPlayer(
                         state = playerState,
                         onTogglePlay = viewModel::togglePlayPause,
-                        onNext = viewModel::skipNext
+                        onNext = viewModel::skipNext,
+                        onOpen = { showPlayer = true }
                     )
                 }
                 NavigationBar(containerColor = CardColor) {
@@ -204,5 +220,27 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                 else -> EmptyState("Добавляйте любимые композиции")
             }
         }
+    }
+
+    AnimatedVisibility(
+        visible = playerVisible,
+        enter = slideInVertically(initialOffsetY = { it }),
+        exit = slideOutVertically(targetOffsetY = { it })
+    ) {
+        NowPlayingScreen(
+            state = playerState,
+            queue = queueState,
+            getPositionMs = viewModel::positionMs,
+            onClose = { showPlayer = false },
+            onTogglePlay = viewModel::togglePlayPause,
+            onNext = viewModel::skipNext,
+            onPrevious = viewModel::skipPrevious,
+            onSeek = viewModel::seekTo,
+            onToggleShuffle = viewModel::toggleShuffle,
+            onCycleRepeat = viewModel::cycleRepeat,
+            onQueueItemClick = viewModel::playQueueItem
+        )
+    }
+
     }
 }
