@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.offlineplayer.music.data.MusicRepository
+import com.offlineplayer.music.data.PlayCountStore
 import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.playback.PlayerConnection
 import com.offlineplayer.music.playback.PlayerState
@@ -13,22 +14,36 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/** Сколько треков показывать на полках «Недавно добавленные» и «Часто прослушиваемые». */
+private const val ShelfLimit = 10
+
+/** Сколько миллисекунд трек должен играть, чтобы считаться прослушанным. */
+private const val ListenThresholdMs = 20_000L
 
 data class LibraryUiState(
     val tracks: List<Track> = emptyList(),
     val totalCount: Int = 0,
     val hasQuery: Boolean = false,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val recent: List<Track> = emptyList(),
+    val frequent: List<Track> = emptyList()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = MusicRepository(application.applicationContext)
     private val playerConnection = PlayerConnection(application.applicationContext)
+    private val playCountStore = PlayCountStore(application.applicationContext)
+    private val playCounts = MutableStateFlow(playCountStore.loadAll())
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
@@ -39,18 +54,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val queueState: StateFlow<QueueState> = playerConnection.queue
 
     val uiState: StateFlow<LibraryUiState> =
-        combine(allTracks, query, isLoading) { all, q, loading ->
+        combine(allTracks, query, isLoading, playCounts) { all, q, loading, counts ->
             val trimmed = q.trim()
             val shown = if (trimmed.isEmpty()) all else all.filter { it.matches(trimmed) }
+            // Полки показываем только когда поиск пуст.
+            val browsing = trimmed.isEmpty()
             LibraryUiState(
                 tracks = shown,
                 totalCount = all.size,
                 hasQuery = trimmed.isNotEmpty(),
-                isLoading = loading
+                isLoading = loading,
+                recent = if (browsing) {
+                    all.sortedByDescending { it.dateAddedSec }.take(ShelfLimit)
+                } else emptyList(),
+                frequent = if (browsing) {
+                    all.filter { (counts[it.id] ?: 0) > 0 }
+                        .sortedByDescending { counts[it.id] ?: 0 }
+                        .take(ShelfLimit)
+                } else emptyList()
             )
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    init {
+        // Прослушивание засчитывается, когда трек непрерывно играет ListenThresholdMs.
+        // Пауза до этого момента сбрасывает отсчёт; один и тот же трек за раз считается один раз.
+        viewModelScope.launch {
+            var currentId: String? = null
+            var counted = false
+            playerState
+                .map { it.mediaId to it.isPlaying }
+                .distinctUntilChanged()
+                .collectLatest { (mediaId, playing) ->
+                    if (mediaId != currentId) {
+                        currentId = mediaId
+                        counted = false
+                    }
+                    val trackId = mediaId?.toLongOrNull()
+                    if (trackId != null && playing && !counted) {
+                        delay(ListenThresholdMs)
+                        counted = true
+                        playCountStore.increment(trackId)
+                        playCounts.value = playCountStore.loadAll()
+                    }
+                }
+        }
+    }
 
     fun onQueryChange(newQuery: String) {
         query.value = newQuery

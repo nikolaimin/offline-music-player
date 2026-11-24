@@ -19,6 +19,7 @@ import com.offlineplayer.music.ui.components.EmptyState
 import com.offlineplayer.music.ui.components.LibraryItem
 import com.offlineplayer.music.ui.components.ListScrollbar
 import com.offlineplayer.music.ui.components.SectionTitle
+import com.offlineplayer.music.ui.components.TrackShelf
 import com.offlineplayer.music.ui.util.formatDuration
 
 @Composable
@@ -28,7 +29,9 @@ fun LibraryScreen(
     isLoading: Boolean,
     hasQuery: Boolean,
     currentTrackId: Long?,
-    onTrackClick: (Track) -> Unit
+    onTrackClick: (Track) -> Unit,
+    recent: List<Track> = emptyList(),
+    frequent: List<Track> = emptyList()
 ) {
     if (tracks.isNotEmpty()) {
         val listState = rememberLazyListState()
@@ -41,6 +44,28 @@ fun LibraryScreen(
                 contentPadding = PaddingValues(top = 10.dp, end = 22.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (recent.isNotEmpty()) {
+                    item(key = "shelf_recent") {
+                        TrackShelf(
+                            title = "Недавно добавленные",
+                            tracks = recent,
+                            currentTrackId = currentTrackId,
+                            onTrackClick = onTrackClick
+                        )
+                    }
+                }
+
+                if (frequent.isNotEmpty()) {
+                    item(key = "shelf_frequent") {
+                        TrackShelf(
+                            title = "Часто прослушиваемые",
+                            tracks = frequent,
+                            currentTrackId = currentTrackId,
+                            onTrackClick = onTrackClick
+                        )
+                    }
+                }
+
                 // Заголовок — часть списка: прокручивается вместе с музыкой.
                 item(key = "header") {
                     SectionTitle(title)

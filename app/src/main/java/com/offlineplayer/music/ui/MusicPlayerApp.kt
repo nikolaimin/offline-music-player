@@ -194,7 +194,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                         isLoading = uiState.isLoading,
                         hasQuery = uiState.hasQuery,
                         currentTrackId = playerState.mediaId?.toLongOrNull(),
-                        onTrackClick = onTrackClick
+                        onTrackClick = onTrackClick,
+                        recent = uiState.recent,
+                        frequent = uiState.frequent
                     )
                 } else {
                     Column {

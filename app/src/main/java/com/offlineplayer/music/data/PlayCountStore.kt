@@ -1,0 +1,30 @@
+package com.offlineplayer.music.data
+
+import android.content.Context
+
+/**
+ * Хранит на телефоне, сколько раз каждый трек был прослушан (id трека -> число).
+ * Android сам такую статистику не ведёт, поэтому приложение считает её само.
+ */
+class PlayCountStore(context: Context) {
+
+    private val prefs = context.getSharedPreferences("play_counts", Context.MODE_PRIVATE)
+
+    fun loadAll(): Map<Long, Int> {
+        val result = HashMap<Long, Int>()
+        for ((key, value) in prefs.all) {
+            val id = key.toLongOrNull() ?: continue
+            val count = value as? Int ?: continue
+            result[id] = count
+        }
+        return result
+    }
+
+    /** Добавляет одно прослушивание и возвращает новое значение. */
+    fun increment(trackId: Long): Int {
+        val key = trackId.toString()
+        val next = prefs.getInt(key, 0) + 1
+        prefs.edit().putInt(key, next).apply()
+        return next
+    }
+}
