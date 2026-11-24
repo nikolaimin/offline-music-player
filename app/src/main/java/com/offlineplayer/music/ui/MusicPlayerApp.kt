@@ -94,9 +94,17 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         if (granted) viewModel.loadTracks()
     }
 
+    // Запуск трека, который ждёт ответа на запрос разрешения уведомлений.
+    var pendingStart by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* Музыка играет и без уведомления, результат не нужен. */ }
+    ) {
+        // Музыка играет и без уведомления, поэтому результат не важен:
+        // главное, что пользователь ответил, и можно начинать воспроизведение.
+        pendingStart?.invoke()
+        pendingStart = null
+    }
 
     // При каждом возвращении в приложение: перепроверяем доступ и обновляем библиотеку.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -110,7 +118,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     }
 
     // Android 13+: без этого разрешения уведомление с кнопками не покажется.
-    val askNotificationsOnce: () -> Unit = {
+    // Если запрос нужен, музыка стартует только после ответа на него, иначе сразу.
+    val startAfterNotificationPrompt: (() -> Unit) -> Unit = { start ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !askedForNotifications &&
             ContextCompat.checkSelfPermission(
@@ -118,13 +127,15 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             askedForNotifications = true
+            pendingStart = start
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            start()
         }
     }
 
     val onTrackClick: (Track) -> Unit = { track ->
-        viewModel.playTrack(track)
-        askNotificationsOnce()
+        startAfterNotificationPrompt { viewModel.playTrack(track) }
     }
 
     val playerVisible = showPlayer && playerState.mediaId != null
@@ -240,8 +251,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                 onBack = { openFolder = null },
                                 onTrackClick = { track ->
                                     // Очередь = содержимое папки.
-                                    viewModel.playTrackFrom(folderTracks, track)
-                                    askNotificationsOnce()
+                                    startAfterNotificationPrompt {
+                                        viewModel.playTrackFrom(folderTracks, track)
+                                    }
                                 }
                             )
                         } else {
