@@ -27,7 +27,14 @@ import kotlinx.coroutines.launch
 private const val FolderLimit = 100
 
 /** Сколько миллисекунд трек должен играть, чтобы считаться прослушанным. */
-private const val ListenThresholdMs = 20_000L
+private const val ListenThresholdMs = 10_000L
+
+/**
+ * Для коротких треков (голосовые сообщения и т.п.) порог ниже: достаточно проиграть половину,
+ * иначе такой трек закончится раньше порога и никогда не попадёт в «Часто прослушиваемые».
+ */
+private fun listenThresholdMs(durationMs: Long): Long =
+    if (durationMs > 0L) minOf(ListenThresholdMs, maxOf(1_000L, durationMs / 2)) else ListenThresholdMs
 
 data class LibraryUiState(
     val tracks: List<Track> = emptyList(),
@@ -102,7 +109,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         lastPlayedId.value = trackId
                     }
                     if (trackId != null && playing && !counted) {
-                        delay(ListenThresholdMs)
+                        delay(listenThresholdMs(playerState.value.durationMs))
                         counted = true
                         playCountStore.increment(trackId)
                         playCounts.value = playCountStore.loadAll()
