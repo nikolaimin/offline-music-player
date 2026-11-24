@@ -8,12 +8,31 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.util.LruCache
 import android.util.Size
+import java.util.Collections
 
 /** Достаёт обложку трека. Вызывать только из фонового потока. */
 object ArtworkLoader {
 
     private const val MAX_SIDE = 1024
+    private const val CACHE_BYTES = 12 * 1024 * 1024
+
+    // Кеш последних обложек и список треков без обложки, чтобы не читать файл повторно.
+    private val cache = object : LruCache<Long, Bitmap>(CACHE_BYTES) {
+        override fun sizeOf(key: Long, value: Bitmap): Int = value.byteCount
+    }
+    private val withoutArtwork: MutableSet<Long> = Collections.synchronizedSet(HashSet())
+
+    /** То же, что [load], но запоминает результат. Вызывать только из фонового потока. */
+    fun loadCached(context: Context, trackId: Long): Bitmap? {
+        cache.get(trackId)?.let { return it }
+        if (trackId in withoutArtwork) return null
+
+        val bitmap = load(context, trackId)
+        if (bitmap != null) cache.put(trackId, bitmap) else withoutArtwork.add(trackId)
+        return bitmap
+    }
 
     fun load(context: Context, trackId: Long): Bitmap? {
         val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackId)
