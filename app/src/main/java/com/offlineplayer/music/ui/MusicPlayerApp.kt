@@ -49,10 +49,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.EmptyState
+import com.offlineplayer.music.ui.components.LibraryFolder
 import com.offlineplayer.music.ui.components.MiniPlayer
 import com.offlineplayer.music.ui.components.SearchField
 import com.offlineplayer.music.ui.components.SectionTitle
 import com.offlineplayer.music.ui.components.appBackground
+import com.offlineplayer.music.ui.screens.FolderScreen
 import com.offlineplayer.music.ui.screens.LibraryScreen
 import com.offlineplayer.music.ui.screens.NowPlayingScreen
 import com.offlineplayer.music.ui.screens.PermissionScreen
@@ -79,6 +81,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     val queueState by viewModel.queueState.collectAsStateWithLifecycle()
 
     var showPlayer by rememberSaveable { mutableStateOf(false) }
+    var openFolder by rememberSaveable { mutableStateOf<LibraryFolder?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
     var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
@@ -106,10 +109,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         if (!hasAudioPermission(context)) permissionLauncher.launch(AudioPermission)
     }
 
-    val onTrackClick: (Track) -> Unit = { track ->
-        viewModel.playTrack(track)
-
-        // Android 13+: без этого разрешения уведомление с кнопками не покажется.
+    // Android 13+: без этого разрешения уведомление с кнопками не покажется.
+    val askNotificationsOnce: () -> Unit = {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !askedForNotifications &&
             ContextCompat.checkSelfPermission(
@@ -121,10 +122,19 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    val onTrackClick: (Track) -> Unit = { track ->
+        viewModel.playTrack(track)
+        askNotificationsOnce()
+    }
+
     val playerVisible = showPlayer && playerState.mediaId != null
 
     // Кнопка «Назад» закрывает экран плеера, а не приложение.
     BackHandler(enabled = playerVisible) { showPlayer = false }
+
+    // Если открыта папка, «Назад» возвращает к библиотеке.
+    val folderVisible = openFolder != null && !uiState.hasQuery
+    BackHandler(enabled = folderVisible && !playerVisible) { openFolder = null }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -213,17 +223,41 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             ) { tab ->
                 when (tab) {
                     0 -> if (hasPermission) {
-                        // Заголовок «Ваша библиотека» лежит внутри списка и прокручивается с музыкой.
-                        LibraryScreen(
-                            title = "Ваша библиотека · ${uiState.totalCount}",
-                            tracks = uiState.tracks,
-                            isLoading = uiState.isLoading,
-                            hasQuery = uiState.hasQuery,
-                            currentTrackId = playerState.mediaId?.toLongOrNull(),
-                            onTrackClick = onTrackClick,
-                            recent = uiState.recent,
-                            frequent = uiState.frequent
-                        )
+                        val folder = openFolder
+                        if (folder != null && folderVisible) {
+                            val folderTracks = when (folder) {
+                                LibraryFolder.Recent -> uiState.recent
+                                LibraryFolder.Frequent -> uiState.frequent
+                            }
+                            FolderScreen(
+                                title = folder.title,
+                                tracks = folderTracks,
+                                emptyText = when (folder) {
+                                    LibraryFolder.Recent -> "Нет добавленных треков"
+                                    LibraryFolder.Frequent -> "Пока нет прослушанных треков"
+                                },
+                                currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                onBack = { openFolder = null },
+                                onTrackClick = { track ->
+                                    // Очередь = содержимое папки.
+                                    viewModel.playTrackFrom(folderTracks, track)
+                                    askNotificationsOnce()
+                                }
+                            )
+                        } else {
+                            // Заголовок «Ваша библиотека» лежит внутри списка и прокручивается с музыкой.
+                            LibraryScreen(
+                                title = "Ваша библиотека · ${uiState.totalCount}",
+                                tracks = uiState.tracks,
+                                isLoading = uiState.isLoading,
+                                hasQuery = uiState.hasQuery,
+                                currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                onTrackClick = onTrackClick,
+                                recentCover = uiState.recent.firstOrNull(),
+                                frequentCover = uiState.lastPlayed,
+                                onOpenFolder = { openFolder = it }
+                            )
+                        }
                     } else {
                         Column {
                             Spacer(modifier = Modifier.height(10.dp))

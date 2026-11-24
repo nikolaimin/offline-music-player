@@ -23,8 +23,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Сколько треков показывать на полках «Недавно добавленные» и «Часто прослушиваемые». */
-private const val ShelfLimit = 10
+/** Сколько треков хранят папки «Недавно добавленные» и «Часто прослушиваемые». */
+private const val FolderLimit = 100
 
 /** Сколько миллисекунд трек должен играть, чтобы считаться прослушанным. */
 private const val ListenThresholdMs = 20_000L
@@ -35,7 +35,9 @@ data class LibraryUiState(
     val hasQuery: Boolean = false,
     val isLoading: Boolean = false,
     val recent: List<Track> = emptyList(),
-    val frequent: List<Track> = emptyList()
+    val frequent: List<Track> = emptyList(),
+    /** Трек, который играл последним (обложка папки «Часто прослушиваемые»). */
+    val lastPlayed: Track? = null
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -44,6 +46,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val playerConnection = PlayerConnection(application.applicationContext)
     private val playCountStore = PlayCountStore(application.applicationContext)
     private val playCounts = MutableStateFlow(playCountStore.loadAll())
+    private val lastPlayedId = MutableStateFlow(playCountStore.lastPlayedId())
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
@@ -54,10 +57,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val queueState: StateFlow<QueueState> = playerConnection.queue
 
     val uiState: StateFlow<LibraryUiState> =
-        combine(allTracks, query, isLoading, playCounts) { all, q, loading, counts ->
+        combine(allTracks, query, isLoading, playCounts, lastPlayedId) { all, q, loading, counts, lastId ->
             val trimmed = q.trim()
             val shown = if (trimmed.isEmpty()) all else all.filter { it.matches(trimmed) }
-            // Полки показываем только когда поиск пуст.
+            // Папки показываем только когда поиск пуст.
             val browsing = trimmed.isEmpty()
             LibraryUiState(
                 tracks = shown,
@@ -65,13 +68,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 hasQuery = trimmed.isNotEmpty(),
                 isLoading = loading,
                 recent = if (browsing) {
-                    all.sortedByDescending { it.dateAddedSec }.take(ShelfLimit)
+                    all.sortedByDescending { it.dateAddedSec }.take(FolderLimit)
                 } else emptyList(),
                 frequent = if (browsing) {
                     all.filter { (counts[it.id] ?: 0) > 0 }
                         .sortedByDescending { counts[it.id] ?: 0 }
-                        .take(ShelfLimit)
-                } else emptyList()
+                        .take(FolderLimit)
+                } else emptyList(),
+                lastPlayed = lastId?.let { id -> all.firstOrNull { it.id == id } }
             )
         }
             .flowOn(Dispatchers.Default)
@@ -92,6 +96,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         counted = false
                     }
                     val trackId = mediaId?.toLongOrNull()
+                    // Обложка папки «Часто прослушиваемые» меняется, как только трек заиграл.
+                    if (trackId != null && playing && lastPlayedId.value != trackId) {
+                        playCountStore.setLastPlayed(trackId)
+                        lastPlayedId.value = trackId
+                    }
                     if (trackId != null && playing && !counted) {
                         delay(ListenThresholdMs)
                         counted = true
@@ -122,6 +131,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Играет выбранный трек; очередью становится список, который сейчас на экране. */
     fun playTrack(track: Track) {
         val list = uiState.value.tracks
+        val index = list.indexOfFirst { it.id == track.id }
+        if (index >= 0) playerConnection.playTracks(list, index)
+    }
+
+    /** Играет [track]; очередью становится [list] (например, содержимое открытой папки). */
+    fun playTrackFrom(list: List<Track>, track: Track) {
         val index = list.indexOfFirst { it.id == track.id }
         if (index >= 0) playerConnection.playTracks(list, index)
     }

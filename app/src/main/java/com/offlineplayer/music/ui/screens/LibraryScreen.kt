@@ -16,10 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.EmptyState
+import com.offlineplayer.music.ui.components.FolderTiles
+import com.offlineplayer.music.ui.components.LibraryFolder
 import com.offlineplayer.music.ui.components.LibraryItem
 import com.offlineplayer.music.ui.components.ListScrollbar
 import com.offlineplayer.music.ui.components.SectionTitle
-import com.offlineplayer.music.ui.components.TrackShelf
 import com.offlineplayer.music.ui.util.formatDuration
 
 @Composable
@@ -30,8 +31,9 @@ fun LibraryScreen(
     hasQuery: Boolean,
     currentTrackId: Long?,
     onTrackClick: (Track) -> Unit,
-    recent: List<Track> = emptyList(),
-    frequent: List<Track> = emptyList()
+    recentCover: Track? = null,
+    frequentCover: Track? = null,
+    onOpenFolder: (LibraryFolder) -> Unit = {}
 ) {
     if (tracks.isNotEmpty()) {
         val listState = rememberLazyListState()
@@ -44,24 +46,13 @@ fun LibraryScreen(
                 contentPadding = PaddingValues(top = 10.dp, end = 22.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (recent.isNotEmpty()) {
-                    item(key = "shelf_recent") {
-                        TrackShelf(
-                            title = "Недавно добавленные",
-                            tracks = recent,
-                            currentTrackId = currentTrackId,
-                            onTrackClick = onTrackClick
-                        )
-                    }
-                }
-
-                if (frequent.isNotEmpty()) {
-                    item(key = "shelf_frequent") {
-                        TrackShelf(
-                            title = "Часто прослушиваемые",
-                            tracks = frequent,
-                            currentTrackId = currentTrackId,
-                            onTrackClick = onTrackClick
+                // Две папки рядом; при поиске скрыты.
+                if (!hasQuery) {
+                    item(key = "folders") {
+                        FolderTiles(
+                            recentCover = recentCover,
+                            frequentCover = frequentCover,
+                            onOpen = onOpenFolder
                         )
                     }
                 }
