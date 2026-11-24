@@ -44,9 +44,9 @@ private val RowFadeMask = Brush.horizontalGradient(
 private class Loaded(val bitmap: ImageBitmap?)
 
 /**
- * Фон строки трека: обложка альбома или, если обложки нет, логотип приложения
- * (res/drawable-nodpi/app_logo.webp). Пока обложка загружается, фон пустой,
- * чтобы логотип не мигал перед появлением настоящей обложки.
+ * Фон строки трека: обложка альбома или, если обложки нет, фирменный фон мини-плеера
+ * (res/drawable-nodpi/mini_player_fallback.webp). Пока обложка загружается, фон пустой,
+ * чтобы запасная картинка не мигала перед появлением настоящей обложки.
  */
 @Composable
 fun TrackBackground(trackId: Long, modifier: Modifier = Modifier) {
@@ -96,13 +96,19 @@ fun TrackBackground(trackId: Long, modifier: Modifier = Modifier) {
                     .background(Color.Black.copy(alpha = 0.3f))
             )
         } else {
-            // Логотип квадратный: показываем целиком у левого края, а не растягиваем на всю строку.
+            // Нет обложки: тот же фирменный фон, что и у мини-плеера.
             Image(
-                painter = painterResource(R.drawable.app_logo),
+                painter = painterResource(R.drawable.mini_player_fallback),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit,
-                alignment = Alignment.CenterStart
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.Center
+            )
+            // Лёгкое затемнение, чтобы серый подзаголовок читался на ярких волнах.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.2f))
             )
         }
     }
