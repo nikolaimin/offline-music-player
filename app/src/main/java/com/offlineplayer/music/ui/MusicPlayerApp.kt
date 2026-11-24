@@ -9,7 +9,13 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
@@ -53,6 +59,9 @@ import com.offlineplayer.music.ui.screens.PermissionScreen
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
 import com.offlineplayer.music.ui.theme.CardColor
+
+/** Длительность анимации перехода между вкладками. */
+private const val TabAnimationMs = 300
 
 private data class Tab(val title: String, val icon: String)
 
@@ -185,49 +194,67 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             // зазор до заголовка, а при прокрутке треки уходят под строку поиска.
             Spacer(modifier = Modifier.height(16.dp))
 
-            when (selectedTab) {
-                0 -> if (hasPermission) {
-                    // Заголовок «Ваша библиотека» лежит внутри списка и прокручивается с музыкой.
-                    LibraryScreen(
-                        title = "Ваша библиотека · ${uiState.totalCount}",
-                        tracks = uiState.tracks,
-                        isLoading = uiState.isLoading,
-                        hasQuery = uiState.hasQuery,
-                        currentTrackId = playerState.mediaId?.toLongOrNull(),
-                        onTrackClick = onTrackClick,
-                        recent = uiState.recent,
-                        frequent = uiState.frequent
-                    )
-                } else {
-                    Column {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SectionTitle("Ваша библиотека")
-                        PermissionScreen(
-                            onRequest = { permissionLauncher.launch(AudioPermission) },
-                            onOpenSettings = {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                        Uri.fromParts("package", context.packageName, null)
-                                    )
-                                )
-                            }
-                        )
+            AnimatedContent(
+                targetState = selectedTab,
+                modifier = Modifier.fillMaxSize(),
+                transitionSpec = {
+                    // Вкладка справа от текущей въезжает справа, слева: слева.
+                    val direction = if (targetState > initialState) {
+                        AnimatedContentTransitionScope.SlideDirection.Left
+                    } else {
+                        AnimatedContentTransitionScope.SlideDirection.Right
                     }
-                }
+                    (slideIntoContainer(direction, tween(TabAnimationMs)) +
+                        fadeIn(tween(TabAnimationMs))) togetherWith
+                        (slideOutOfContainer(direction, tween(TabAnimationMs)) +
+                            fadeOut(tween(TabAnimationMs)))
+                },
+                label = "tabContent"
+            ) { tab ->
+                when (tab) {
+                    0 -> if (hasPermission) {
+                        // Заголовок «Ваша библиотека» лежит внутри списка и прокручивается с музыкой.
+                        LibraryScreen(
+                            title = "Ваша библиотека · ${uiState.totalCount}",
+                            tracks = uiState.tracks,
+                            isLoading = uiState.isLoading,
+                            hasQuery = uiState.hasQuery,
+                            currentTrackId = playerState.mediaId?.toLongOrNull(),
+                            onTrackClick = onTrackClick,
+                            recent = uiState.recent,
+                            frequent = uiState.frequent
+                        )
+                    } else {
+                        Column {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SectionTitle("Ваша библиотека")
+                            PermissionScreen(
+                                onRequest = { permissionLauncher.launch(AudioPermission) },
+                                onOpenSettings = {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                            Uri.fromParts("package", context.packageName, null)
+                                        )
+                                    )
+                                }
+                            )
+                        }
+                    }
 
-                1 -> Column {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SectionTitle("Ваши подборки")
-                    Spacer(modifier = Modifier.height(14.dp))
-                    EmptyState("Здесь будут ваши плейлисты")
-                }
+                    1 -> Column {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SectionTitle("Ваши подборки")
+                        Spacer(modifier = Modifier.height(14.dp))
+                        EmptyState("Здесь будут ваши плейлисты")
+                    }
 
-                else -> Column {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SectionTitle("Любимые композиции")
-                    Spacer(modifier = Modifier.height(14.dp))
-                    EmptyState("Добавляйте любимые композиции")
+                    else -> Column {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SectionTitle("Любимые композиции")
+                        Spacer(modifier = Modifier.height(14.dp))
+                        EmptyState("Добавляйте любимые композиции")
+                    }
                 }
             }
         }
