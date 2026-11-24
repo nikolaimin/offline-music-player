@@ -25,6 +25,7 @@ import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.CardColor
 import com.offlineplayer.music.ui.theme.IconTile
 import com.offlineplayer.music.ui.theme.SecondaryText
+import com.offlineplayer.music.ui.theme.TrackTitleFont
 
 @Composable
 fun LibraryItem(
@@ -61,6 +62,7 @@ fun LibraryItem(
             Text(
                 title,
                 color = if (isCurrent) Accent else Color.White,
+                fontFamily = TrackTitleFont,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 15.sp,
                 maxLines = 1,

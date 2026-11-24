@@ -50,6 +50,7 @@ import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
 import com.offlineplayer.music.ui.theme.CardColor
 import com.offlineplayer.music.ui.theme.SecondaryText
+import com.offlineplayer.music.ui.theme.TrackTitleFont
 import com.offlineplayer.music.ui.util.formatDuration
 import kotlinx.coroutines.delay
 
@@ -161,6 +162,7 @@ fun NowPlayingScreen(
         Text(
             text = state.title,
             color = Color.White,
+            fontFamily = TrackTitleFont,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,

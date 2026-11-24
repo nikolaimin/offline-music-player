@@ -25,6 +25,7 @@ import com.offlineplayer.music.playback.PlayerState
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.CardColor
 import com.offlineplayer.music.ui.theme.SecondaryText
+import com.offlineplayer.music.ui.theme.TrackTitleFont
 
 @Composable
 fun MiniPlayer(
@@ -49,6 +50,7 @@ fun MiniPlayer(
             Text(
                 state.title,
                 color = Color.White,
+                fontFamily = TrackTitleFont,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp,
                 maxLines = 1,

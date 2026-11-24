@@ -25,6 +25,7 @@ import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.CardColor
 import com.offlineplayer.music.ui.theme.SecondaryText
+import com.offlineplayer.music.ui.theme.TrackTitleFont
 
 /** Горизонтальная полка с заголовком и карточками треков («Недавно добавленные» и т.п.). */
 @Composable
@@ -75,6 +76,7 @@ private fun TrackCard(
         Text(
             track.title,
             color = if (isCurrent) Accent else Color.White,
+            fontFamily = TrackTitleFont,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp,
             maxLines = 1,
