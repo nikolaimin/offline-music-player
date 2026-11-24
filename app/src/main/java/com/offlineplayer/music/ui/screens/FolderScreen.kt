@@ -75,6 +75,7 @@ fun FolderScreen(
                             subtitle = "${track.artist} • ${track.album}",
                             trailing = formatDuration(track.durationMs),
                             isCurrent = track.id == currentTrackId,
+                            trackId = track.id,
                             onClick = { onTrackClick(track) }
                         )
                     }

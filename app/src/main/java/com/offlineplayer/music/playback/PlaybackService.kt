@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -32,6 +34,24 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+
+        // Если файл не открылся, переходим к следующему треку, а не застреваем на ошибке.
+        // Счётчик подряд идущих ошибок не даёт зациклиться, когда не играет ни один файл.
+        var failedInARow = 0
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) failedInARow = 0
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                failedInARow++
+                if (player.hasNextMediaItem() && failedInARow < player.mediaItemCount) {
+                    player.seekToNextMediaItem()
+                    player.prepare()
+                    player.play()
+                }
+            }
+        })
 
         val openAppIntent = PendingIntent.getActivity(
             this,
