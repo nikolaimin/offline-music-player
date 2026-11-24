@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +51,8 @@ fun LibraryItem(
     trailing: String? = null,
     isCurrent: Boolean = false,
     trackId: Long? = null,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
     val shape = RoundedCornerShape(16.dp)
@@ -112,6 +115,24 @@ fun LibraryItem(
             if (trailing != null) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(trailing, color = SecondaryText, fontSize = 12.sp, style = textStyle)
+            }
+
+            // Сердечко: в избранном закрашено акцентным цветом, иначе приглушённое.
+            if (onToggleFavorite != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onToggleFavorite),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "♥",
+                        color = if (isFavorite) Accent else SecondaryText.copy(alpha = 0.55f),
+                        fontSize = 22.sp
+                    )
+                }
             }
         }
     }

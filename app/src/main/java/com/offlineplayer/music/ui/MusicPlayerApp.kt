@@ -248,6 +248,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                     LibraryFolder.Frequent -> "Пока нет прослушанных треков"
                                 },
                                 currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                favoriteIds = uiState.favoriteIds,
+                                onToggleFavorite = viewModel::toggleFavorite,
                                 onBack = { openFolder = null },
                                 onTrackClick = { track ->
                                     // Очередь = содержимое папки.
@@ -265,6 +267,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                 hasQuery = uiState.hasQuery,
                                 currentTrackId = playerState.mediaId?.toLongOrNull(),
                                 onTrackClick = onTrackClick,
+                                favoriteIds = uiState.favoriteIds,
+                                onToggleFavorite = viewModel::toggleFavorite,
                                 recentCover = uiState.recent.firstOrNull(),
                                 frequentCover = uiState.lastPlayed,
                                 onOpenFolder = { openFolder = it }
@@ -295,12 +299,24 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                         EmptyState("Здесь будут ваши плейлисты")
                     }
 
-                    else -> Column {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SectionTitle("Любимые композиции")
-                        Spacer(modifier = Modifier.height(14.dp))
-                        EmptyState("Добавляйте любимые композиции")
-                    }
+                    else -> FolderScreen(
+                        title = "Любимые композиции",
+                        tracks = uiState.favorites,
+                        emptyText = if (uiState.hasQuery) {
+                            "Ничего не найдено"
+                        } else {
+                            "Нажимайте ♥ у треков, чтобы добавить их сюда"
+                        },
+                        currentTrackId = playerState.mediaId?.toLongOrNull(),
+                        favoriteIds = uiState.favoriteIds,
+                        onToggleFavorite = viewModel::toggleFavorite,
+                        onTrackClick = { track ->
+                            // Очередь = избранное.
+                            startAfterNotificationPrompt {
+                                viewModel.playTrackFrom(uiState.favorites, track)
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -322,7 +338,11 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             onSeek = viewModel::seekTo,
             onToggleShuffle = viewModel::toggleShuffle,
             onCycleRepeat = viewModel::cycleRepeat,
-            onQueueItemClick = viewModel::playQueueItem
+            onQueueItemClick = viewModel::playQueueItem,
+            isFavorite = playerState.mediaId?.toLongOrNull()?.let { it in uiState.favoriteIds } == true,
+            onToggleFavorite = {
+                playerState.mediaId?.toLongOrNull()?.let(viewModel::toggleFavorite)
+            }
         )
     }
 

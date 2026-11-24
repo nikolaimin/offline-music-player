@@ -28,29 +28,36 @@ import com.offlineplayer.music.ui.components.ListScrollbar
 import com.offlineplayer.music.ui.components.SectionTitle
 import com.offlineplayer.music.ui.util.formatDuration
 
-/** Содержимое папки («Недавно добавленные» или «Часто прослушиваемые») со стрелкой «назад». */
+/**
+ * Список треков с заголовком: содержимое папки («Недавно добавленные», «Часто прослушиваемые»)
+ * со стрелкой «назад» или, если [onBack] не задан, вкладка «Избранное».
+ */
 @Composable
 fun FolderScreen(
     title: String,
     tracks: List<Track>,
     emptyText: String,
     currentTrackId: Long?,
-    onBack: () -> Unit,
-    onTrackClick: (Track) -> Unit
+    onTrackClick: (Track) -> Unit,
+    favoriteIds: Set<Long> = emptySet(),
+    onToggleFavorite: (Long) -> Unit = {},
+    onBack: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clickable(onClick = onBack),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("‹", color = Color.White, fontSize = 30.sp)
+            if (onBack != null) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("‹", color = Color.White, fontSize = 30.sp)
+                }
+                Spacer(modifier = Modifier.width(4.dp))
             }
-            Spacer(modifier = Modifier.width(4.dp))
             SectionTitle("$title · ${tracks.size}")
         }
 
@@ -76,6 +83,8 @@ fun FolderScreen(
                             trailing = formatDuration(track.durationMs),
                             isCurrent = track.id == currentTrackId,
                             trackId = track.id,
+                            isFavorite = track.id in favoriteIds,
+                            onToggleFavorite = { onToggleFavorite(track.id) },
                             onClick = { onTrackClick(track) }
                         )
                     }

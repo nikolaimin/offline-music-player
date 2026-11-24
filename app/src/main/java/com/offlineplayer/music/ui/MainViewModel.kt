@@ -3,6 +3,7 @@ package com.offlineplayer.music.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.offlineplayer.music.data.FavoritesStore
 import com.offlineplayer.music.data.MusicRepository
 import com.offlineplayer.music.data.PlayCountStore
 import com.offlineplayer.music.data.Track
@@ -44,7 +45,10 @@ data class LibraryUiState(
     val recent: List<Track> = emptyList(),
     val frequent: List<Track> = emptyList(),
     /** Трек, который играл последним (обложка папки «Часто прослушиваемые»). */
-    val lastPlayed: Track? = null
+    val lastPlayed: Track? = null,
+    /** Избранные треки (при поиске фильтруются так же, как библиотека). */
+    val favorites: List<Track> = emptyList(),
+    val favoriteIds: Set<Long> = emptySet()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -54,6 +58,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val playCountStore = PlayCountStore(application.applicationContext)
     private val playCounts = MutableStateFlow(playCountStore.loadAll())
     private val lastPlayedId = MutableStateFlow(playCountStore.lastPlayedId())
+    private val favoritesStore = FavoritesStore(application.applicationContext)
+    private val favoriteIds = MutableStateFlow(favoritesStore.loadAll())
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
@@ -63,8 +69,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val playerState: StateFlow<PlayerState> = playerConnection.state
     val queueState: StateFlow<QueueState> = playerConnection.queue
 
+    // Статистика и избранное собраны в один поток: combine принимает не больше пяти потоков.
+    private val extras = combine(playCounts, lastPlayedId, favoriteIds) { counts, lastId, favIds ->
+        Triple(counts, lastId, favIds)
+    }
+
     val uiState: StateFlow<LibraryUiState> =
-        combine(allTracks, query, isLoading, playCounts, lastPlayedId) { all, q, loading, counts, lastId ->
+        combine(allTracks, query, isLoading, extras) { all, q, loading, extra ->
+            val (counts, lastId, favIds) = extra
             val trimmed = q.trim()
             val shown = if (trimmed.isEmpty()) all else all.filter { it.matches(trimmed) }
             // Папки показываем только когда поиск пуст.
@@ -82,7 +94,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         .sortedByDescending { counts[it.id] ?: 0 }
                         .take(FolderLimit)
                 } else emptyList(),
-                lastPlayed = lastId?.let { id -> all.firstOrNull { it.id == id } }
+                lastPlayed = lastId?.let { id -> all.firstOrNull { it.id == id } },
+                favorites = shown.filter { it.id in favIds },
+                favoriteIds = favIds
             )
         }
             .flowOn(Dispatchers.Default)
@@ -116,6 +130,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
         }
+    }
+
+    /** Добавляет трек в избранное или убирает из него. */
+    fun toggleFavorite(trackId: Long) {
+        favoriteIds.value = favoritesStore.setFavorite(trackId, trackId !in favoriteIds.value)
     }
 
     fun onQueryChange(newQuery: String) {

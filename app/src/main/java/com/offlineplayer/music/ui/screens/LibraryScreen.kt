@@ -31,6 +31,8 @@ fun LibraryScreen(
     hasQuery: Boolean,
     currentTrackId: Long?,
     onTrackClick: (Track) -> Unit,
+    favoriteIds: Set<Long> = emptySet(),
+    onToggleFavorite: (Long) -> Unit = {},
     recentCover: Track? = null,
     frequentCover: Track? = null,
     onOpenFolder: (LibraryFolder) -> Unit = {}
@@ -69,6 +71,8 @@ fun LibraryScreen(
                         trailing = formatDuration(track.durationMs),
                         isCurrent = track.id == currentTrackId,
                         trackId = track.id,
+                        isFavorite = track.id in favoriteIds,
+                        onToggleFavorite = { onToggleFavorite(track.id) },
                         onClick = { onTrackClick(track) }
                     )
                 }

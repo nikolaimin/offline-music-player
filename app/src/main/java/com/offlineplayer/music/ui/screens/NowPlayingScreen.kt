@@ -66,7 +66,9 @@ fun NowPlayingScreen(
     onSeek: (Long) -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
-    onQueueItemClick: (Int) -> Unit
+    onQueueItemClick: (Int) -> Unit,
+    isFavorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {}
 ) {
     var showQueue by remember { mutableStateOf(false) }
     var position by remember { mutableLongStateOf(0L) }
@@ -159,23 +161,36 @@ fun NowPlayingScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Text(
-            text = state.title,
-            color = Color.White,
-            fontFamily = TrackTitleFont,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = listOf(state.artist, state.album).filter { it.isNotBlank() }.joinToString(" • "),
-            color = SecondaryText,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.title,
+                    color = Color.White,
+                    fontFamily = TrackTitleFont,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = listOf(state.artist, state.album).filter { it.isNotBlank() }.joinToString(" • "),
+                    color = SecondaryText,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Добавить текущий трек в избранное или убрать из него.
+            RoundButton(
+                text = "♥",
+                size = 48.dp,
+                textSize = 26,
+                tint = if (isFavorite) Accent else SecondaryText,
+                onClick = onToggleFavorite
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
