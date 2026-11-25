@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -44,7 +45,7 @@ import androidx.media3.common.Player
 import com.offlineplayer.music.playback.PlayerState
 import com.offlineplayer.music.playback.QueueState
 import com.offlineplayer.music.ui.components.Artwork
-import com.offlineplayer.music.ui.components.LibraryItem
+import com.offlineplayer.music.ui.components.QueueItemCard
 import com.offlineplayer.music.ui.components.appBackground
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
@@ -132,13 +133,17 @@ fun NowPlayingScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                itemsIndexed(queue.items) { index, item ->
-                    LibraryItem(
+                itemsIndexed(queue.items, key = { index, item -> "${index}_${item.mediaId}" }) { index, item ->
+                    QueueItemCard(
+                        trackId = item.mediaId.toLongOrNull() ?: -1L,
+                        index = index,
                         title = item.title,
-                        subtitle = item.artist,
+                        artist = item.artist,
                         isCurrent = index == queue.currentIndex,
+                        isPlaying = state.isPlaying,
                         onClick = { onQueueItemClick(index) }
                     )
                 }
