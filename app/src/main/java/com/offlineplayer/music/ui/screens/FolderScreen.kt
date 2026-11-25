@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,12 +43,18 @@ fun FolderScreen(
     favoriteIds: Set<Long> = emptySet(),
     onToggleFavorite: (Long) -> Unit = {},
     isPlaying: Boolean = false,
+    onAddToPlaylist: ((Long) -> Unit)? = null,
+    onRemoveFromPlaylist: ((Long) -> Unit)? = null,
+    headerAction: (@Composable () -> Unit)? = null,
     onBack: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Spacer(modifier = Modifier.height(10.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             if (onBack != null) {
                 Box(
                     modifier = Modifier
@@ -59,7 +66,11 @@ fun FolderScreen(
                 }
                 Spacer(modifier = Modifier.width(4.dp))
             }
-            SectionTitle("$title · ${tracks.size}")
+            SectionTitle("$title · ${tracks.size}", modifier = Modifier.weight(1f, fill = false))
+            if (headerAction != null) {
+                Spacer(modifier = Modifier.weight(1f))
+                headerAction()
+            }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -87,6 +98,8 @@ fun FolderScreen(
                             isPlaying = isPlaying,
                             isFavorite = track.id in favoriteIds,
                             onToggleFavorite = { onToggleFavorite(track.id) },
+                            onAddToPlaylist = onAddToPlaylist?.let { add -> { add(track.id) } },
+                            onRemoveFromPlaylist = onRemoveFromPlaylist?.let { remove -> { remove(track.id) } },
                             onClick = { onTrackClick(track) }
                         )
                     }

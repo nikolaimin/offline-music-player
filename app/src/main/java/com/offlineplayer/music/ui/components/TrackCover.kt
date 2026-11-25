@@ -41,12 +41,18 @@ private class Loaded(val bitmap: ImageBitmap?)
  * Настоящая обложка плавно проявляется поверх абстрактной.
  */
 @Composable
-fun TrackCover(trackId: Long, size: Dp, modifier: Modifier = Modifier) {
+fun TrackCover(
+    trackId: Long,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    showArtwork: Boolean = true
+) {
     val context = LocalContext.current
 
     var loaded by remember(trackId) {
         mutableStateOf<Loaded?>(
-            ArtworkLoader.cachedThumb(trackId)?.let { Loaded(it.asImageBitmap()) }
+            if (!showArtwork) Loaded(null)
+            else ArtworkLoader.cachedThumb(trackId)?.let { Loaded(it.asImageBitmap()) }
                 ?: if (ArtworkLoader.knownWithoutThumb(trackId)) Loaded(null) else null
         )
     }

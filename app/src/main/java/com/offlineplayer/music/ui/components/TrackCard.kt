@@ -81,7 +81,9 @@ fun TrackCard(
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onAddToPlaylist: (() -> Unit)? = null,
+    onRemoveFromPlaylist: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -191,14 +193,36 @@ fun TrackCard(
                         onToggleFavorite()
                     }
                 )
+
+                if (onAddToPlaylist != null) {
+                    TrackMenuItem(text = "Добавить в плейлист", icon = "＋") {
+                        menuOpen = false
+                        onAddToPlaylist()
+                    }
+                }
+                if (onRemoveFromPlaylist != null) {
+                    TrackMenuItem(text = "Убрать из плейлиста", icon = "✕") {
+                        menuOpen = false
+                        onRemoveFromPlaylist()
+                    }
+                }
             }
         }
     }
 }
 
+@Composable
+private fun TrackMenuItem(text: String, icon: String, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text = text, color = Color.White) },
+        leadingIcon = { Text(text = icon, color = SecondaryText, fontSize = 18.sp) },
+        onClick = onClick
+    )
+}
+
 /** Три вертикальные точки (значок меню). Рисуются сами, без набора иконок. */
 @Composable
-private fun MoreDots(color: Color) {
+internal fun MoreDots(color: Color) {
     Canvas(modifier = Modifier.size(width = 4.dp, height = 18.dp)) {
         val radius = size.width / 2f
         listOf(radius, size.height / 2f, size.height - radius).forEach { centerY ->
@@ -208,7 +232,7 @@ private fun MoreDots(color: Color) {
 }
 
 /** Фон карточки. [active] от 0 до 1 плавно переводит обычное стекло в подсвеченное. */
-private fun DrawScope.drawCardBackground(active: Float) {
+internal fun DrawScope.drawCardBackground(active: Float) {
     val radius = CornerRadius(CardCorner.toPx())
 
     drawRoundRect(

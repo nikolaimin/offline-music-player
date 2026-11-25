@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.offlineplayer.music.data.FavoritesStore
 import com.offlineplayer.music.data.MusicRepository
 import com.offlineplayer.music.data.PlayCountStore
+import com.offlineplayer.music.data.Playlist
+import com.offlineplayer.music.data.PlaylistStore
 import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.playback.PlayerConnection
 import com.offlineplayer.music.playback.PlayerState
@@ -37,6 +39,22 @@ private const val ListenThresholdMs = 10_000L
 private fun listenThresholdMs(durationMs: Long): Long =
     if (durationMs > 0L) minOf(ListenThresholdMs, maxOf(1_000L, durationMs / 2)) else ListenThresholdMs
 
+/** Плейлист для показа на экране. */
+data class PlaylistUi(
+    val id: Long,
+    val name: String,
+    /** Сколько треков плейлиста сейчас есть на телефоне. */
+    val trackCount: Int,
+    /** Треки плейлиста в порядке добавления (при поиске фильтруются как библиотека). */
+    val tracks: List<Track>,
+    /** id всех существующих треков плейлиста (для отметок в диалогах). */
+    val trackIds: Set<Long>,
+    /** Трек, обложка которого служит обложкой плейлиста (первый существующий). */
+    val coverTrackId: Long?
+)
+
+private const val MaxPlaylistNameLength = 40
+
 data class LibraryUiState(
     val tracks: List<Track> = emptyList(),
     val totalCount: Int = 0,
@@ -48,7 +66,10 @@ data class LibraryUiState(
     val lastPlayed: Track? = null,
     /** Избранные треки (при поиске фильтруются так же, как библиотека). */
     val favorites: List<Track> = emptyList(),
-    val favoriteIds: Set<Long> = emptySet()
+    val favoriteIds: Set<Long> = emptySet(),
+    val playlists: List<PlaylistUi> = emptyList(),
+    /** Вся библиотека без учёта поиска (выбор треков для плейлиста). */
+    val library: List<Track> = emptyList()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -60,6 +81,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val lastPlayedId = MutableStateFlow(playCountStore.lastPlayedId())
     private val favoritesStore = FavoritesStore(application.applicationContext)
     private val favoriteIds = MutableStateFlow(favoritesStore.loadAll())
+    private val playlistStore = PlaylistStore(application.applicationContext)
+    private val playlists = MutableStateFlow(playlistStore.loadAll())
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
@@ -69,15 +92,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val playerState: StateFlow<PlayerState> = playerConnection.state
     val queueState: StateFlow<QueueState> = playerConnection.queue
 
-    // Статистика и избранное собраны в один поток: combine принимает не больше пяти потоков.
-    private val extras = combine(playCounts, lastPlayedId, favoriteIds) { counts, lastId, favIds ->
-        Triple(counts, lastId, favIds)
+    private class Extras(
+        val counts: Map<Long, Int>,
+        val lastId: Long?,
+        val favIds: Set<Long>,
+        val playlists: List<Playlist>
+    )
+
+    // Статистика, избранное и плейлисты собраны в один поток: combine принимает не больше пяти потоков.
+    private val extras = combine(playCounts, lastPlayedId, favoriteIds, playlists) { counts, lastId, favIds, lists ->
+        Extras(counts, lastId, favIds, lists)
     }
 
     val uiState: StateFlow<LibraryUiState> =
         combine(allTracks, query, isLoading, extras) { all, q, loading, extra ->
-            val (counts, lastId, favIds) = extra
+            val counts = extra.counts
+            val lastId = extra.lastId
+            val favIds = extra.favIds
             val trimmed = q.trim()
+            val byId = all.associateBy { it.id }
             val shown = if (trimmed.isEmpty()) all else all.filter { it.matches(trimmed) }
             // Папки показываем только когда поиск пуст.
             val browsing = trimmed.isEmpty()
@@ -96,7 +129,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 } else emptyList(),
                 lastPlayed = lastId?.let { id -> all.firstOrNull { it.id == id } },
                 favorites = shown.filter { it.id in favIds },
-                favoriteIds = favIds
+                favoriteIds = favIds,
+                playlists = extra.playlists.map { playlist ->
+                    val existing = playlist.trackIds.mapNotNull { byId[it] }
+                    PlaylistUi(
+                        id = playlist.id,
+                        name = playlist.name,
+                        trackCount = existing.size,
+                        tracks = if (trimmed.isEmpty()) existing else existing.filter { it.matches(trimmed) },
+                        trackIds = existing.mapTo(HashSet()) { it.id },
+                        coverTrackId = existing.firstOrNull()?.id
+                    )
+                },
+                library = all
             )
         }
             .flowOn(Dispatchers.Default)
@@ -135,6 +180,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Добавляет трек в избранное или убирает из него. */
     fun toggleFavorite(trackId: Long) {
         favoriteIds.value = favoritesStore.setFavorite(trackId, trackId !in favoriteIds.value)
+    }
+
+    private fun updatePlaylists(transform: (List<Playlist>) -> List<Playlist>) {
+        val updated = transform(playlists.value)
+        playlistStore.saveAll(updated)
+        playlists.value = updated
+    }
+
+    private fun cleanName(name: String): String = name.trim().take(MaxPlaylistNameLength)
+
+    /** Создаёт плейлист (с первым треком, если он задан) и возвращает его id; пустое имя не принимается. */
+    fun createPlaylist(name: String, firstTrackId: Long? = null): Long? {
+        val clean = cleanName(name)
+        if (clean.isEmpty()) return null
+        val id = maxOf(System.currentTimeMillis(), (playlists.value.maxOfOrNull { it.id } ?: 0L) + 1)
+        updatePlaylists { it + Playlist(id, clean, listOfNotNull(firstTrackId)) }
+        return id
+    }
+
+    fun renamePlaylist(playlistId: Long, name: String) {
+        val clean = cleanName(name)
+        if (clean.isEmpty()) return
+        updatePlaylists { list -> list.map { if (it.id == playlistId) it.copy(name = clean) else it } }
+    }
+
+    fun deletePlaylist(playlistId: Long) {
+        updatePlaylists { list -> list.filterNot { it.id == playlistId } }
+    }
+
+    /** Добавляет трек в плейлист, а если он там уже есть, убирает. */
+    fun togglePlaylistTrack(playlistId: Long, trackId: Long) {
+        updatePlaylists { list ->
+            list.map { playlist ->
+                when {
+                    playlist.id != playlistId -> playlist
+                    trackId in playlist.trackIds ->
+                        playlist.copy(trackIds = playlist.trackIds - trackId)
+                    else -> playlist.copy(trackIds = playlist.trackIds + trackId)
+                }
+            }
+        }
+    }
+
+    fun removeFromPlaylist(playlistId: Long, trackId: Long) {
+        updatePlaylists { list ->
+            list.map { if (it.id == playlistId) it.copy(trackIds = it.trackIds - trackId) else it }
+        }
     }
 
     fun onQueryChange(newQuery: String) {

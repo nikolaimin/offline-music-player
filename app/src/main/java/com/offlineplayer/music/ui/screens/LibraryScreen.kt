@@ -34,6 +34,7 @@ fun LibraryScreen(
     favoriteIds: Set<Long> = emptySet(),
     onToggleFavorite: (Long) -> Unit = {},
     isPlaying: Boolean = false,
+    onAddToPlaylist: ((Long) -> Unit)? = null,
     recentCover: Track? = null,
     frequentCover: Track? = null,
     onOpenFolder: (LibraryFolder) -> Unit = {}
@@ -75,6 +76,7 @@ fun LibraryScreen(
                         isPlaying = isPlaying,
                         isFavorite = track.id in favoriteIds,
                         onToggleFavorite = { onToggleFavorite(track.id) },
+                        onAddToPlaylist = onAddToPlaylist?.let { add -> { add(track.id) } },
                         onClick = { onTrackClick(track) }
                     )
                 }
