@@ -1,11 +1,20 @@
 package com.offlineplayer.music.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.heightIn
+import com.offlineplayer.music.ui.components.QueueItemHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -54,6 +63,10 @@ import com.offlineplayer.music.ui.theme.SecondaryText
 import com.offlineplayer.music.ui.theme.TrackTitleFont
 import com.offlineplayer.music.ui.util.formatDuration
 import kotlinx.coroutines.delay
+
+// Высота пяти строк очереди (строка 74 dp) и промежутки между ними.
+private val QueueSpacing = 10.dp
+private val VisibleQueueHeight = QueueItemHeight * 5 + QueueSpacing * 4
 
 @Composable
 fun NowPlayingScreen(
@@ -122,45 +135,59 @@ fun NowPlayingScreen(
             )
         }
 
-        // Центр: обложка или очередь
-        if (showQueue) {
-            val listState = rememberLazyListState()
+        // Центр: обложка или очередь; смена плавная (появление с лёгким подъёмом).
+        AnimatedContent(
+            targetState = showQueue,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            transitionSpec = {
+                (fadeIn(tween(350, delayMillis = 100)) +
+                    slideInVertically(tween(450, easing = FastOutSlowInEasing)) { it / 8 } +
+                    scaleIn(tween(450), initialScale = 0.96f))
+                    .togetherWith(fadeOut(tween(200)))
+            },
+            label = "playerCenter"
+        ) { queueShown ->
+            if (queueShown) {
+                val listState = rememberLazyListState()
 
-            LaunchedEffect(queue.currentIndex) {
-                if (queue.currentIndex >= 0) listState.scrollToItem(queue.currentIndex)
-            }
+                LaunchedEffect(queue.currentIndex) {
+                    if (queue.currentIndex >= 0) listState.scrollToItem(queue.currentIndex)
+                }
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                itemsIndexed(queue.items, key = { index, item -> "${index}_${item.mediaId}" }) { index, item ->
-                    QueueItemCard(
-                        trackId = item.mediaId.toLongOrNull() ?: -1L,
-                        index = index,
-                        title = item.title,
-                        artist = item.artist,
-                        isCurrent = index == queue.currentIndex,
-                        isPlaying = state.isPlaying,
-                        onClick = { onQueueItemClick(index) }
+                // Видно не больше пяти треков, остальные доступны прокруткой.
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.heightIn(max = VisibleQueueHeight),
+                        verticalArrangement = Arrangement.spacedBy(QueueSpacing)
+                    ) {
+                        itemsIndexed(queue.items, key = { index, item -> "${index}_${item.mediaId}" }) { index, item ->
+                            QueueItemCard(
+                                trackId = item.mediaId.toLongOrNull() ?: -1L,
+                                index = index,
+                                title = item.title,
+                                artist = item.artist,
+                                isCurrent = index == queue.currentIndex,
+                                isPlaying = state.isPlaying,
+                                onClick = { onQueueItemClick(index) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Artwork(
+                        trackId = state.mediaId?.toLongOrNull(),
+                        modifier = Modifier
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(28.dp))
                     )
                 }
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Artwork(
-                    trackId = state.mediaId?.toLongOrNull(),
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(28.dp))
-                )
             }
         }
 

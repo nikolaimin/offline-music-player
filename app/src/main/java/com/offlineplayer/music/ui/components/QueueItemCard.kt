@@ -31,6 +31,9 @@ import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.SecondaryText
 import com.offlineplayer.music.ui.theme.TrackTitleFont
 
+/** Высота строки: обложка 56 dp и вертикальные отступы по 9 dp. */
+val QueueItemHeight = 74.dp
+
 /**
  * Строка очереди на экране проигрывателя: номер, обложка, название и исполнитель.
  * Играющий трек выделен стеклянной подсветкой и эквалайзером вместо номера.
@@ -72,6 +75,7 @@ fun QueueItemCard(
                 indication = null,
                 onClick = onClick
             )
+            .height(QueueItemHeight)
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
