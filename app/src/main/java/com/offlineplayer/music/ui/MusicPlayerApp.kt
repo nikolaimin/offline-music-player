@@ -248,6 +248,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                     LibraryFolder.Frequent -> "Пока нет прослушанных треков"
                                 },
                                 currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                isPlaying = playerState.isPlaying,
                                 favoriteIds = uiState.favoriteIds,
                                 onToggleFavorite = viewModel::toggleFavorite,
                                 onBack = { openFolder = null },
@@ -266,6 +267,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                 isLoading = uiState.isLoading,
                                 hasQuery = uiState.hasQuery,
                                 currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                isPlaying = playerState.isPlaying,
                                 onTrackClick = onTrackClick,
                                 favoriteIds = uiState.favoriteIds,
                                 onToggleFavorite = viewModel::toggleFavorite,
@@ -308,6 +310,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                             "Нажимайте ♥ у треков, чтобы добавить их сюда"
                         },
                         currentTrackId = playerState.mediaId?.toLongOrNull(),
+                        isPlaying = playerState.isPlaying,
                         favoriteIds = uiState.favoriteIds,
                         onToggleFavorite = viewModel::toggleFavorite,
                         onTrackClick = { track ->

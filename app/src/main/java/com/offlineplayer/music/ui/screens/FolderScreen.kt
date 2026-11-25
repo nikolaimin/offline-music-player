@@ -23,9 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.EmptyState
-import com.offlineplayer.music.ui.components.LibraryItem
 import com.offlineplayer.music.ui.components.ListScrollbar
 import com.offlineplayer.music.ui.components.SectionTitle
+import com.offlineplayer.music.ui.components.TrackCard
 import com.offlineplayer.music.ui.util.formatDuration
 
 /**
@@ -41,6 +41,7 @@ fun FolderScreen(
     onTrackClick: (Track) -> Unit,
     favoriteIds: Set<Long> = emptySet(),
     onToggleFavorite: (Long) -> Unit = {},
+    isPlaying: Boolean = false,
     onBack: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -77,12 +78,13 @@ fun FolderScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(tracks, key = { it.id }) { track ->
-                        LibraryItem(
+                        TrackCard(
+                            trackId = track.id,
                             title = track.title,
                             subtitle = "${track.artist} • ${track.album}",
-                            trailing = formatDuration(track.durationMs),
+                            duration = formatDuration(track.durationMs),
                             isCurrent = track.id == currentTrackId,
-                            trackId = track.id,
+                            isPlaying = isPlaying,
                             isFavorite = track.id in favoriteIds,
                             onToggleFavorite = { onToggleFavorite(track.id) },
                             onClick = { onTrackClick(track) }
