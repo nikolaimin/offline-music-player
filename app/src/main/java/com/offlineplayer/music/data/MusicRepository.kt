@@ -26,7 +26,9 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.DATE_ADDED
         )
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        // Файлы без длительности (служебные копии вроде AutoBackup) воспроизвести нельзя: скрываем их.
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
+            "${MediaStore.Audio.Media.DURATION} >= $MIN_DURATION_MS"
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
 
         val tracks = ArrayList<Track>()
@@ -69,4 +71,8 @@ class MusicRepository(private val context: Context) {
 
     private fun String?.cleanUnknown(fallback: String): String =
         if (this.isNullOrBlank() || this == MediaStore.UNKNOWN_STRING) fallback else this
+
+    private companion object {
+        const val MIN_DURATION_MS = 1000L
+    }
 }

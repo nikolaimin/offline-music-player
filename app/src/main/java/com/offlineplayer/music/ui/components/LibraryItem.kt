@@ -27,6 +27,7 @@ import com.offlineplayer.music.ui.theme.IconTile
 import com.offlineplayer.music.ui.theme.SecondaryText
 import com.offlineplayer.music.ui.theme.TrackTitleFont
 
+/** Простая строка списка (используется в очереди воспроизведения). */
 @Composable
 fun LibraryItem(
     title: String,

@@ -174,6 +174,17 @@ class PlayerConnection(context: Context) {
         }
     }
 
+    /**
+     * Убирает трек из очереди (например, после удаления файла). Если он играл,
+     * плеер сам переходит к следующему треку.
+     */
+    fun removeFromQueue(mediaId: String) {
+        val c = controller ?: return
+        for (index in c.mediaItemCount - 1 downTo 0) {
+            if (c.getMediaItemAt(index).mediaId == mediaId) c.removeMediaItem(index)
+        }
+    }
+
     fun playQueueItem(index: Int) {
         controller?.let {
             if (index in 0 until it.mediaItemCount) {

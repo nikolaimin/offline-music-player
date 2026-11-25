@@ -1,13 +1,16 @@
 package com.offlineplayer.music.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -48,16 +51,22 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.offlineplayer.music.data.Track
-import com.offlineplayer.music.ui.components.EmptyState
 import com.offlineplayer.music.ui.components.LibraryFolder
+import com.offlineplayer.music.ui.components.AddToPlaylistDialog
 import com.offlineplayer.music.ui.components.MiniPlayer
+import com.offlineplayer.music.ui.components.PickTracksDialog
+import com.offlineplayer.music.ui.components.PlaylistConfirmDialog
+import com.offlineplayer.music.ui.components.PlaylistNameDialog
 import com.offlineplayer.music.ui.components.SearchField
 import com.offlineplayer.music.ui.components.SectionTitle
+import com.offlineplayer.music.ui.components.TrackEditDialog
 import com.offlineplayer.music.ui.components.appBackground
 import com.offlineplayer.music.ui.screens.FolderScreen
+import com.offlineplayer.music.ui.screens.HeaderPillButton
 import com.offlineplayer.music.ui.screens.LibraryScreen
 import com.offlineplayer.music.ui.screens.NowPlayingScreen
 import com.offlineplayer.music.ui.screens.PermissionScreen
+import com.offlineplayer.music.ui.screens.PlaylistsScreen
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
 import com.offlineplayer.music.ui.theme.CardColor
@@ -66,6 +75,13 @@ import com.offlineplayer.music.ui.theme.CardColor
 private const val TabAnimationMs = 300
 
 private data class Tab(val title: String, val icon: String)
+
+/** Для чего открыто окно с названием плейлиста. */
+private sealed interface PlaylistNameTarget {
+    /** Новый плейлист; [firstTrackId] сразу попадёт в него (создание из меню трека). */
+    data class Create(val firstTrackId: Long?) : PlaylistNameTarget
+    data class Rename(val playlist: PlaylistUi) : PlaylistNameTarget
+}
 
 private val tabs = listOf(
     Tab("Музыка", "♫"),
@@ -82,6 +98,15 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
 
     var showPlayer by rememberSaveable { mutableStateOf(false) }
     var openFolder by rememberSaveable { mutableStateOf<LibraryFolder?>(null) }
+    var openPlaylistId by rememberSaveable { mutableStateOf<Long?>(null) }
+    // Трек, для которого выбирают плейлист («Добавить в плейлист»).
+    var trackForPlaylist by remember { mutableStateOf<Long?>(null) }
+    var nameDialog by remember { mutableStateOf<PlaylistNameTarget?>(null) }
+    var deleteTarget by remember { mutableStateOf<PlaylistUi?>(null) }
+    var pickingTracks by remember { mutableStateOf(false) }
+    // Трек, который правят, и трек, который собираются удалить с телефона.
+    var editTarget by remember { mutableStateOf<Track?>(null) }
+    var deleteTrackTarget by remember { mutableStateOf<Track?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
     var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
@@ -94,9 +119,17 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         if (granted) viewModel.loadTracks()
     }
 
+    // Запуск трека, который ждёт ответа на запрос разрешения уведомлений.
+    var pendingStart by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* Музыка играет и без уведомления, результат не нужен. */ }
+    ) {
+        // Музыка играет и без уведомления, поэтому результат не важен:
+        // главное, что пользователь ответил, и можно начинать воспроизведение.
+        pendingStart?.invoke()
+        pendingStart = null
+    }
 
     // При каждом возвращении в приложение: перепроверяем доступ и обновляем библиотеку.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -110,7 +143,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     }
 
     // Android 13+: без этого разрешения уведомление с кнопками не покажется.
-    val askNotificationsOnce: () -> Unit = {
+    // Если запрос нужен, музыка стартует только после ответа на него, иначе сразу.
+    val startAfterNotificationPrompt: (() -> Unit) -> Unit = { start ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !askedForNotifications &&
             ContextCompat.checkSelfPermission(
@@ -118,13 +152,68 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             askedForNotifications = true
+            pendingStart = start
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            start()
+        }
+    }
+
+    // Удаление файла: Android 11+ и 10 просят подтверждение в системном окне,
+    // Android 9 и старше сначала нужно разрешение на запись.
+    var pendingDelete by remember { mutableStateOf<MainViewModel.DeleteRequest?>(null) }
+    var pendingWriteDelete by remember { mutableStateOf<Track?>(null) }
+
+    val showDeleteFailed: () -> Unit = {
+        Toast.makeText(context, "Не удалось удалить файл", Toast.LENGTH_SHORT).show()
+    }
+
+    val consentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val request = pendingDelete
+        pendingDelete = null
+        if (request != null && result.resultCode == Activity.RESULT_OK) {
+            viewModel.finishDeleteAfterConsent(request, showDeleteFailed)
+        }
+    }
+
+    val startDelete: (Track) -> Unit = { track ->
+        viewModel.deleteTrack(
+            track,
+            onNeedsConsent = { request ->
+                pendingDelete = request
+                consentLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+            },
+            onFailed = showDeleteFailed
+        )
+    }
+
+    val writePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val track = pendingWriteDelete
+        pendingWriteDelete = null
+        if (track != null) {
+            if (granted) startDelete(track) else showDeleteFailed()
+        }
+    }
+
+    val requestDelete: (Track) -> Unit = { track ->
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingWriteDelete = track
+            writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            startDelete(track)
         }
     }
 
     val onTrackClick: (Track) -> Unit = { track ->
-        viewModel.playTrack(track)
-        askNotificationsOnce()
+        startAfterNotificationPrompt { viewModel.playTrack(track) }
     }
 
     val playerVisible = showPlayer && playerState.mediaId != null
@@ -135,6 +224,12 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     // Если открыта папка, «Назад» возвращает к библиотеке.
     val folderVisible = openFolder != null && !uiState.hasQuery
     BackHandler(enabled = folderVisible && !playerVisible) { openFolder = null }
+
+    // Если открыт плейлист (его могли удалить), «Назад» возвращает к списку плейлистов.
+    val openPlaylist = uiState.playlists.firstOrNull { it.id == openPlaylistId }
+    BackHandler(enabled = openPlaylist != null && selectedTab == 1 && !playerVisible) {
+        openPlaylistId = null
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -237,11 +332,18 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                     LibraryFolder.Frequent -> "Пока нет прослушанных треков"
                                 },
                                 currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                isPlaying = playerState.isPlaying,
+                                favoriteIds = uiState.favoriteIds,
+                                onToggleFavorite = viewModel::toggleFavorite,
+                                onAddToPlaylist = { trackForPlaylist = it },
+                                onEditTrack = { editTarget = it },
+                                onDeleteTrack = { deleteTrackTarget = it },
                                 onBack = { openFolder = null },
                                 onTrackClick = { track ->
                                     // Очередь = содержимое папки.
-                                    viewModel.playTrackFrom(folderTracks, track)
-                                    askNotificationsOnce()
+                                    startAfterNotificationPrompt {
+                                        viewModel.playTrackFrom(folderTracks, track)
+                                    }
                                 }
                             )
                         } else {
@@ -252,7 +354,13 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                 isLoading = uiState.isLoading,
                                 hasQuery = uiState.hasQuery,
                                 currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                isPlaying = playerState.isPlaying,
                                 onTrackClick = onTrackClick,
+                                favoriteIds = uiState.favoriteIds,
+                                onToggleFavorite = viewModel::toggleFavorite,
+                                onAddToPlaylist = { trackForPlaylist = it },
+                                onEditTrack = { editTarget = it },
+                                onDeleteTrack = { deleteTrackTarget = it },
                                 recentCover = uiState.recent.firstOrNull(),
                                 frequentCover = uiState.lastPlayed,
                                 onOpenFolder = { openFolder = it }
@@ -276,19 +384,69 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                         }
                     }
 
-                    1 -> Column {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SectionTitle("Ваши подборки")
-                        Spacer(modifier = Modifier.height(14.dp))
-                        EmptyState("Здесь будут ваши плейлисты")
+                    1 -> {
+                        val playlist = openPlaylist
+                        if (playlist != null) {
+                            FolderScreen(
+                                title = playlist.name,
+                                tracks = playlist.tracks,
+                                emptyText = if (uiState.hasQuery) {
+                                    "Ничего не найдено"
+                                } else {
+                                    "Плейлист пуст. Добавьте треки кнопкой «＋ Треки»"
+                                },
+                                currentTrackId = playerState.mediaId?.toLongOrNull(),
+                                isPlaying = playerState.isPlaying,
+                                favoriteIds = uiState.favoriteIds,
+                                onToggleFavorite = viewModel::toggleFavorite,
+                                onAddToPlaylist = { trackForPlaylist = it },
+                                onEditTrack = { editTarget = it },
+                                onDeleteTrack = { deleteTrackTarget = it },
+                                onRemoveFromPlaylist = { viewModel.removeFromPlaylist(playlist.id, it) },
+                                headerAction = {
+                                    HeaderPillButton(text = "＋ Треки", onClick = { pickingTracks = true })
+                                },
+                                onBack = { openPlaylistId = null },
+                                onTrackClick = { track ->
+                                    // Очередь = содержимое плейлиста.
+                                    startAfterNotificationPrompt {
+                                        viewModel.playTrackFrom(playlist.tracks, track)
+                                    }
+                                }
+                            )
+                        } else {
+                            PlaylistsScreen(
+                                playlists = uiState.playlists,
+                                onCreate = { nameDialog = PlaylistNameTarget.Create(null) },
+                                onOpen = { openPlaylistId = it },
+                                onRename = { nameDialog = PlaylistNameTarget.Rename(it) },
+                                onDelete = { deleteTarget = it }
+                            )
+                        }
                     }
 
-                    else -> Column {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SectionTitle("Любимые композиции")
-                        Spacer(modifier = Modifier.height(14.dp))
-                        EmptyState("Добавляйте любимые композиции")
-                    }
+                    else -> FolderScreen(
+                        title = "Любимые композиции",
+                        tracks = uiState.favorites,
+                        emptyText = if (uiState.hasQuery) {
+                            "Ничего не найдено"
+                        } else {
+                            "Нажимайте ♥ у треков, чтобы добавить их сюда"
+                        },
+                        currentTrackId = playerState.mediaId?.toLongOrNull(),
+                        isPlaying = playerState.isPlaying,
+                        favoriteIds = uiState.favoriteIds,
+                        onToggleFavorite = viewModel::toggleFavorite,
+                        onAddToPlaylist = { trackForPlaylist = it },
+                        onEditTrack = { editTarget = it },
+                        onDeleteTrack = { deleteTrackTarget = it },
+                        onTrackClick = { track ->
+                            // Очередь = избранное.
+                            startAfterNotificationPrompt {
+                                viewModel.playTrackFrom(uiState.favorites, track)
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -310,7 +468,95 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             onSeek = viewModel::seekTo,
             onToggleShuffle = viewModel::toggleShuffle,
             onCycleRepeat = viewModel::cycleRepeat,
-            onQueueItemClick = viewModel::playQueueItem
+            onQueueItemClick = viewModel::playQueueItem,
+            isFavorite = playerState.mediaId?.toLongOrNull()?.let { it in uiState.favoriteIds } == true,
+            onToggleFavorite = {
+                playerState.mediaId?.toLongOrNull()?.let(viewModel::toggleFavorite)
+            }
+        )
+    }
+
+    // Окна работы с плейлистами.
+    nameDialog?.let { target ->
+        val renaming = target as? PlaylistNameTarget.Rename
+        PlaylistNameDialog(
+            title = if (renaming != null) "Переименовать плейлист" else "Новый плейлист",
+            initialName = renaming?.playlist?.name.orEmpty(),
+            confirmText = if (renaming != null) "Сохранить" else "Создать",
+            onConfirm = { name ->
+                when (target) {
+                    is PlaylistNameTarget.Rename -> viewModel.renamePlaylist(target.playlist.id, name)
+                    is PlaylistNameTarget.Create -> viewModel.createPlaylist(name, target.firstTrackId)
+                }
+                nameDialog = null
+            },
+            onDismiss = { nameDialog = null }
+        )
+    }
+
+    deleteTarget?.let { target ->
+        PlaylistConfirmDialog(
+            title = "Удалить плейлист?",
+            message = "Плейлист «${target.name}» будет удалён. Сами треки останутся на телефоне.",
+            confirmText = "Удалить",
+            onConfirm = {
+                viewModel.deletePlaylist(target.id)
+                if (openPlaylistId == target.id) openPlaylistId = null
+                deleteTarget = null
+            },
+            onDismiss = { deleteTarget = null }
+        )
+    }
+
+    trackForPlaylist?.let { trackId ->
+        AddToPlaylistDialog(
+            playlists = uiState.playlists,
+            trackId = trackId,
+            onToggle = { playlistId -> viewModel.togglePlaylistTrack(playlistId, trackId) },
+            onCreateNew = {
+                trackForPlaylist = null
+                nameDialog = PlaylistNameTarget.Create(trackId)
+            },
+            onDismiss = { trackForPlaylist = null }
+        )
+    }
+
+    editTarget?.let { track ->
+        TrackEditDialog(
+            track = track,
+            isEdited = track.id in uiState.editedIds,
+            onSave = { title, artist, album ->
+                viewModel.saveTrackEdit(track.id, title, artist, album)
+                editTarget = null
+            },
+            onReset = {
+                viewModel.resetTrackEdit(track.id)
+                editTarget = null
+            },
+            onDismiss = { editTarget = null }
+        )
+    }
+
+    deleteTrackTarget?.let { track ->
+        PlaylistConfirmDialog(
+            title = "Удалить трек?",
+            message = "«${track.title}» будет удалён с телефона без возможности восстановления. " +
+                "Трек исчезнет и из избранного и плейлистов.",
+            confirmText = "Удалить",
+            onConfirm = {
+                deleteTrackTarget = null
+                requestDelete(track)
+            },
+            onDismiss = { deleteTrackTarget = null }
+        )
+    }
+
+    if (pickingTracks && openPlaylist != null) {
+        PickTracksDialog(
+            tracks = uiState.library,
+            selectedIds = openPlaylist.trackIds,
+            onToggle = { trackId -> viewModel.togglePlaylistTrack(openPlaylist.id, trackId) },
+            onDismiss = { pickingTracks = false }
         )
     }
 

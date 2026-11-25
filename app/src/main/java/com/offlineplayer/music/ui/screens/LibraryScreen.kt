@@ -18,9 +18,9 @@ import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.EmptyState
 import com.offlineplayer.music.ui.components.FolderTiles
 import com.offlineplayer.music.ui.components.LibraryFolder
-import com.offlineplayer.music.ui.components.LibraryItem
 import com.offlineplayer.music.ui.components.ListScrollbar
 import com.offlineplayer.music.ui.components.SectionTitle
+import com.offlineplayer.music.ui.components.TrackCard
 import com.offlineplayer.music.ui.util.formatDuration
 
 @Composable
@@ -31,6 +31,12 @@ fun LibraryScreen(
     hasQuery: Boolean,
     currentTrackId: Long?,
     onTrackClick: (Track) -> Unit,
+    favoriteIds: Set<Long> = emptySet(),
+    onToggleFavorite: (Long) -> Unit = {},
+    isPlaying: Boolean = false,
+    onAddToPlaylist: ((Long) -> Unit)? = null,
+    onEditTrack: ((Track) -> Unit)? = null,
+    onDeleteTrack: ((Track) -> Unit)? = null,
     recentCover: Track? = null,
     frequentCover: Track? = null,
     onOpenFolder: (LibraryFolder) -> Unit = {}
@@ -63,11 +69,18 @@ fun LibraryScreen(
                 }
 
                 items(tracks, key = { it.id }) { track ->
-                    LibraryItem(
+                    TrackCard(
+                        trackId = track.id,
                         title = track.title,
                         subtitle = "${track.artist} • ${track.album}",
-                        trailing = formatDuration(track.durationMs),
+                        duration = formatDuration(track.durationMs),
                         isCurrent = track.id == currentTrackId,
+                        isPlaying = isPlaying,
+                        isFavorite = track.id in favoriteIds,
+                        onToggleFavorite = { onToggleFavorite(track.id) },
+                        onAddToPlaylist = onAddToPlaylist?.let { add -> { add(track.id) } },
+                        onEdit = onEditTrack?.let { edit -> { edit(track) } },
+                        onDelete = onDeleteTrack?.let { delete -> { delete(track) } },
                         onClick = { onTrackClick(track) }
                     )
                 }

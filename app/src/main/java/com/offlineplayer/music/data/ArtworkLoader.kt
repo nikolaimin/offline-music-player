@@ -34,25 +34,51 @@ object ArtworkLoader {
         return bitmap
     }
 
-    fun load(context: Context, trackId: Long): Bitmap? {
+    // Маленькие обложки для строк списка: отдельный кеш, чтобы не держать в памяти крупные картинки.
+    private const val THUMB_SIDE = 256
+    private const val THUMB_CACHE_BYTES = 6 * 1024 * 1024
+    private val thumbCache = object : LruCache<Long, Bitmap>(THUMB_CACHE_BYTES) {
+        override fun sizeOf(key: Long, value: Bitmap): Int = value.byteCount
+    }
+    private val withoutThumb: MutableSet<Long> = Collections.synchronizedSet(HashSet())
+
+    /** Уже загруженная маленькая обложка или null. Читает только кеш, можно из UI-потока. */
+    fun cachedThumb(trackId: Long): Bitmap? = thumbCache.get(trackId)
+
+    /** Известно, что у трека нет обложки. Читает только кеш, можно из UI-потока. */
+    fun knownWithoutThumb(trackId: Long): Boolean = trackId in withoutThumb
+
+    /** Маленькая обложка для списка с кешем. Вызывать только из фонового потока. */
+    fun loadThumbCached(context: Context, trackId: Long): Bitmap? {
+        thumbCache.get(trackId)?.let { return it }
+        if (trackId in withoutThumb) return null
+
+        val bitmap = load(context, trackId, THUMB_SIDE, THUMB_SIDE)
+        if (bitmap != null) thumbCache.put(trackId, bitmap) else withoutThumb.add(trackId)
+        return bitmap
+    }
+
+    fun load(context: Context, trackId: Long): Bitmap? = load(context, trackId, 640, MAX_SIDE)
+
+    private fun load(context: Context, trackId: Long, thumbSide: Int, decodeSide: Int): Bitmap? {
         val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackId)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                return context.contentResolver.loadThumbnail(uri, Size(640, 640), null)
+                return context.contentResolver.loadThumbnail(uri, Size(thumbSide, thumbSide), null)
             } catch (e: Exception) {
                 // Нет системной миниатюры: пробуем достать обложку из тегов файла.
             }
         }
-        return loadEmbedded(context, uri)
+        return loadEmbedded(context, uri, decodeSide)
     }
 
-    private fun loadEmbedded(context: Context, uri: Uri): Bitmap? {
+    private fun loadEmbedded(context: Context, uri: Uri, maxSide: Int): Bitmap? {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, uri)
             val bytes = retriever.embeddedPicture ?: return null
-            decodeScaled(bytes)
+            decodeScaled(bytes, maxSide)
         } catch (e: Exception) {
             null
         } finally {
@@ -60,12 +86,12 @@ object ArtworkLoader {
         }
     }
 
-    private fun decodeScaled(bytes: ByteArray): Bitmap? {
+    private fun decodeScaled(bytes: ByteArray, maxSide: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
 
         var sample = 1
-        while (bounds.outWidth / sample > MAX_SIDE || bounds.outHeight / sample > MAX_SIDE) {
+        while (bounds.outWidth / sample > maxSide || bounds.outHeight / sample > maxSide) {
             sample *= 2
         }
 

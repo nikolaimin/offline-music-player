@@ -1,5 +1,15 @@
 package com.offlineplayer.music.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.heightIn
+import com.offlineplayer.music.ui.components.QueueItemHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +54,7 @@ import androidx.media3.common.Player
 import com.offlineplayer.music.playback.PlayerState
 import com.offlineplayer.music.playback.QueueState
 import com.offlineplayer.music.ui.components.Artwork
-import com.offlineplayer.music.ui.components.LibraryItem
+import com.offlineplayer.music.ui.components.QueueItemCard
 import com.offlineplayer.music.ui.components.appBackground
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
@@ -53,6 +63,10 @@ import com.offlineplayer.music.ui.theme.SecondaryText
 import com.offlineplayer.music.ui.theme.TrackTitleFont
 import com.offlineplayer.music.ui.util.formatDuration
 import kotlinx.coroutines.delay
+
+// Высота пяти строк очереди (строка 74 dp) и промежутки между ними.
+private val QueueSpacing = 10.dp
+private val VisibleQueueHeight = QueueItemHeight * 5 + QueueSpacing * 4
 
 @Composable
 fun NowPlayingScreen(
@@ -66,7 +80,9 @@ fun NowPlayingScreen(
     onSeek: (Long) -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
-    onQueueItemClick: (Int) -> Unit
+    onQueueItemClick: (Int) -> Unit,
+    isFavorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {}
 ) {
     var showQueue by remember { mutableStateOf(false) }
     var position by remember { mutableLongStateOf(0L) }
@@ -119,63 +135,94 @@ fun NowPlayingScreen(
             )
         }
 
-        // Центр: обложка или очередь
-        if (showQueue) {
-            val listState = rememberLazyListState()
+        // Центр: обложка или очередь; смена плавная (появление с лёгким подъёмом).
+        AnimatedContent(
+            targetState = showQueue,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            transitionSpec = {
+                (fadeIn(tween(350, delayMillis = 100)) +
+                    slideInVertically(tween(450, easing = FastOutSlowInEasing)) { it / 8 } +
+                    scaleIn(tween(450), initialScale = 0.96f))
+                    .togetherWith(fadeOut(tween(200)))
+            },
+            label = "playerCenter"
+        ) { queueShown ->
+            if (queueShown) {
+                val listState = rememberLazyListState()
 
-            LaunchedEffect(queue.currentIndex) {
-                if (queue.currentIndex >= 0) listState.scrollToItem(queue.currentIndex)
-            }
+                LaunchedEffect(queue.currentIndex) {
+                    if (queue.currentIndex >= 0) listState.scrollToItem(queue.currentIndex)
+                }
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(queue.items) { index, item ->
-                    LibraryItem(
-                        title = item.title,
-                        subtitle = item.artist,
-                        isCurrent = index == queue.currentIndex,
-                        onClick = { onQueueItemClick(index) }
+                // Видно не больше пяти треков, остальные доступны прокруткой.
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.heightIn(max = VisibleQueueHeight),
+                        verticalArrangement = Arrangement.spacedBy(QueueSpacing)
+                    ) {
+                        itemsIndexed(queue.items, key = { index, item -> "${index}_${item.mediaId}" }) { index, item ->
+                            QueueItemCard(
+                                trackId = item.mediaId.toLongOrNull() ?: -1L,
+                                index = index,
+                                title = item.title,
+                                artist = item.artist,
+                                isCurrent = index == queue.currentIndex,
+                                isPlaying = state.isPlaying,
+                                onClick = { onQueueItemClick(index) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Artwork(
+                        trackId = state.mediaId?.toLongOrNull(),
+                        modifier = Modifier
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(28.dp))
                     )
                 }
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Artwork(
-                    trackId = state.mediaId?.toLongOrNull(),
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(28.dp))
-                )
             }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Text(
-            text = state.title,
-            color = Color.White,
-            fontFamily = TrackTitleFont,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = listOf(state.artist, state.album).filter { it.isNotBlank() }.joinToString(" • "),
-            color = SecondaryText,
-            fontSize = 14.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.title,
+                    color = Color.White,
+                    fontFamily = TrackTitleFont,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = listOf(state.artist, state.album).filter { it.isNotBlank() }.joinToString(" • "),
+                    color = SecondaryText,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Добавить текущий трек в избранное или убрать из него.
+            RoundButton(
+                text = "♥",
+                size = 48.dp,
+                textSize = 26,
+                tint = if (isFavorite) Accent else SecondaryText,
+                onClick = onToggleFavorite
+            )
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
