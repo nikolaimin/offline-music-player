@@ -1,13 +1,16 @@
 package com.offlineplayer.music.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -56,6 +59,7 @@ import com.offlineplayer.music.ui.components.PlaylistConfirmDialog
 import com.offlineplayer.music.ui.components.PlaylistNameDialog
 import com.offlineplayer.music.ui.components.SearchField
 import com.offlineplayer.music.ui.components.SectionTitle
+import com.offlineplayer.music.ui.components.TrackEditDialog
 import com.offlineplayer.music.ui.components.appBackground
 import com.offlineplayer.music.ui.screens.FolderScreen
 import com.offlineplayer.music.ui.screens.HeaderPillButton
@@ -100,6 +104,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     var nameDialog by remember { mutableStateOf<PlaylistNameTarget?>(null) }
     var deleteTarget by remember { mutableStateOf<PlaylistUi?>(null) }
     var pickingTracks by remember { mutableStateOf(false) }
+    // Трек, который правят, и трек, который собираются удалить с телефона.
+    var editTarget by remember { mutableStateOf<Track?>(null) }
+    var deleteTrackTarget by remember { mutableStateOf<Track?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
     var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
@@ -149,6 +156,59 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             start()
+        }
+    }
+
+    // Удаление файла: Android 11+ и 10 просят подтверждение в системном окне,
+    // Android 9 и старше сначала нужно разрешение на запись.
+    var pendingDelete by remember { mutableStateOf<MainViewModel.DeleteRequest?>(null) }
+    var pendingWriteDelete by remember { mutableStateOf<Track?>(null) }
+
+    val showDeleteFailed: () -> Unit = {
+        Toast.makeText(context, "Не удалось удалить файл", Toast.LENGTH_SHORT).show()
+    }
+
+    val consentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val request = pendingDelete
+        pendingDelete = null
+        if (request != null && result.resultCode == Activity.RESULT_OK) {
+            viewModel.finishDeleteAfterConsent(request, showDeleteFailed)
+        }
+    }
+
+    val startDelete: (Track) -> Unit = { track ->
+        viewModel.deleteTrack(
+            track,
+            onNeedsConsent = { request ->
+                pendingDelete = request
+                consentLauncher.launch(IntentSenderRequest.Builder(request.intentSender).build())
+            },
+            onFailed = showDeleteFailed
+        )
+    }
+
+    val writePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val track = pendingWriteDelete
+        pendingWriteDelete = null
+        if (track != null) {
+            if (granted) startDelete(track) else showDeleteFailed()
+        }
+    }
+
+    val requestDelete: (Track) -> Unit = { track ->
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingWriteDelete = track
+            writePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            startDelete(track)
         }
     }
 
@@ -276,6 +336,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                 favoriteIds = uiState.favoriteIds,
                                 onToggleFavorite = viewModel::toggleFavorite,
                                 onAddToPlaylist = { trackForPlaylist = it },
+                                onEditTrack = { editTarget = it },
+                                onDeleteTrack = { deleteTrackTarget = it },
                                 onBack = { openFolder = null },
                                 onTrackClick = { track ->
                                     // Очередь = содержимое папки.
@@ -297,6 +359,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                 favoriteIds = uiState.favoriteIds,
                                 onToggleFavorite = viewModel::toggleFavorite,
                                 onAddToPlaylist = { trackForPlaylist = it },
+                                onEditTrack = { editTarget = it },
+                                onDeleteTrack = { deleteTrackTarget = it },
                                 recentCover = uiState.recent.firstOrNull(),
                                 frequentCover = uiState.lastPlayed,
                                 onOpenFolder = { openFolder = it }
@@ -336,6 +400,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                                 favoriteIds = uiState.favoriteIds,
                                 onToggleFavorite = viewModel::toggleFavorite,
                                 onAddToPlaylist = { trackForPlaylist = it },
+                                onEditTrack = { editTarget = it },
+                                onDeleteTrack = { deleteTrackTarget = it },
                                 onRemoveFromPlaylist = { viewModel.removeFromPlaylist(playlist.id, it) },
                                 headerAction = {
                                     HeaderPillButton(text = "＋ Треки", onClick = { pickingTracks = true })
@@ -372,6 +438,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                         favoriteIds = uiState.favoriteIds,
                         onToggleFavorite = viewModel::toggleFavorite,
                         onAddToPlaylist = { trackForPlaylist = it },
+                        onEditTrack = { editTarget = it },
+                        onDeleteTrack = { deleteTrackTarget = it },
                         onTrackClick = { track ->
                             // Очередь = избранное.
                             startAfterNotificationPrompt {
@@ -450,6 +518,36 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                 nameDialog = PlaylistNameTarget.Create(trackId)
             },
             onDismiss = { trackForPlaylist = null }
+        )
+    }
+
+    editTarget?.let { track ->
+        TrackEditDialog(
+            track = track,
+            isEdited = track.id in uiState.editedIds,
+            onSave = { title, artist, album ->
+                viewModel.saveTrackEdit(track.id, title, artist, album)
+                editTarget = null
+            },
+            onReset = {
+                viewModel.resetTrackEdit(track.id)
+                editTarget = null
+            },
+            onDismiss = { editTarget = null }
+        )
+    }
+
+    deleteTrackTarget?.let { track ->
+        PlaylistConfirmDialog(
+            title = "Удалить трек?",
+            message = "«${track.title}» будет удалён с телефона без возможности восстановления. " +
+                "Трек исчезнет и из избранного и плейлистов.",
+            confirmText = "Удалить",
+            onConfirm = {
+                deleteTrackTarget = null
+                requestDelete(track)
+            },
+            onDismiss = { deleteTrackTarget = null }
         )
     }
 

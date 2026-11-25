@@ -58,6 +58,7 @@ private val ActiveTop = Color(0xFF3A2266).copy(alpha = 0.86f)
 private val ActiveBottom = Color(0xFF1D1136).copy(alpha = 0.80f)
 private val GlowColor = Color(0xFF8B5CF6)
 private val MenuColor = Color(0xFF1B1230)
+private val DangerColor = Color(0xFFFF8A80)
 private val GlassBorder = Brush.linearGradient(
     listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))
 )
@@ -83,7 +84,9 @@ fun TrackCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onAddToPlaylist: (() -> Unit)? = null,
-    onRemoveFromPlaylist: (() -> Unit)? = null
+    onRemoveFromPlaylist: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -206,16 +209,35 @@ fun TrackCard(
                         onRemoveFromPlaylist()
                     }
                 }
+                if (onEdit != null) {
+                    TrackMenuItem(text = "Изменить", icon = "✎") {
+                        menuOpen = false
+                        onEdit()
+                    }
+                }
+                if (onDelete != null) {
+                    TrackMenuItem(text = "Удалить с телефона", icon = "✖", color = DangerColor) {
+                        menuOpen = false
+                        onDelete()
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TrackMenuItem(text: String, icon: String, onClick: () -> Unit) {
+private fun TrackMenuItem(
+    text: String,
+    icon: String,
+    color: Color = Color.White,
+    onClick: () -> Unit
+) {
     DropdownMenuItem(
-        text = { Text(text = text, color = Color.White) },
-        leadingIcon = { Text(text = icon, color = SecondaryText, fontSize = 18.sp) },
+        text = { Text(text = text, color = color) },
+        leadingIcon = {
+            Text(text = icon, color = if (color == Color.White) SecondaryText else color, fontSize = 18.sp)
+        },
         onClick = onClick
     )
 }

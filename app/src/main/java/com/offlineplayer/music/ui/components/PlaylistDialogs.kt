@@ -33,11 +33,11 @@ import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.SecondaryText
 import com.offlineplayer.music.ui.util.tracksCountText
 
-private val DialogColor = Color(0xFF1B1230)
+internal val DialogColor = Color(0xFF1B1230)
 private const val MaxNameLength = 40
 
 @Composable
-private fun dialogFieldColors() = OutlinedTextFieldDefaults.colors(
+internal fun dialogFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Color.White,
     unfocusedTextColor = Color.White,
     focusedBorderColor = Accent,

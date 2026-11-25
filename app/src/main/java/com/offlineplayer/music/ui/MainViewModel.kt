@@ -1,6 +1,7 @@
 package com.offlineplayer.music.ui
 
 import android.app.Application
+import android.content.IntentSender
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.offlineplayer.music.data.FavoritesStore
@@ -9,6 +10,9 @@ import com.offlineplayer.music.data.PlayCountStore
 import com.offlineplayer.music.data.Playlist
 import com.offlineplayer.music.data.PlaylistStore
 import com.offlineplayer.music.data.Track
+import com.offlineplayer.music.data.TrackDeleter
+import com.offlineplayer.music.data.TrackEdit
+import com.offlineplayer.music.data.TrackEditStore
 import com.offlineplayer.music.playback.PlayerConnection
 import com.offlineplayer.music.playback.PlayerState
 import com.offlineplayer.music.playback.QueueState
@@ -25,6 +29,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private const val MaxTagLength = 100
 
 /** Сколько треков хранят папки «Недавно добавленные» и «Часто прослушиваемые». */
 private const val FolderLimit = 100
@@ -69,7 +76,9 @@ data class LibraryUiState(
     val favoriteIds: Set<Long> = emptySet(),
     val playlists: List<PlaylistUi> = emptyList(),
     /** Вся библиотека без учёта поиска (выбор треков для плейлиста). */
-    val library: List<Track> = emptyList()
+    val library: List<Track> = emptyList(),
+    /** id треков, у которых данные изменены пользователем. */
+    val editedIds: Set<Long> = emptySet()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -83,29 +92,63 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val favoriteIds = MutableStateFlow(favoritesStore.loadAll())
     private val playlistStore = PlaylistStore(application.applicationContext)
     private val playlists = MutableStateFlow(playlistStore.loadAll())
+    private val trackEditStore = TrackEditStore(application.applicationContext)
+    private val trackEdits = MutableStateFlow(trackEditStore.loadAll())
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
     private val isLoading = MutableStateFlow(false)
     private var loadJob: Job? = null
 
-    val playerState: StateFlow<PlayerState> = playerConnection.state
-    val queueState: StateFlow<QueueState> = playerConnection.queue
+    // Треки с учётом правок пользователя: всё приложение работает с этим списком.
+    // MediaStore отдаёт треки по названию, поэтому после правки порядок пересчитываем.
+    private val displayTracks = combine(allTracks, trackEdits) { all, edits ->
+        if (edits.isEmpty()) {
+            all
+        } else {
+            all.map { track ->
+                edits[track.id]?.let { track.copy(title = it.title, artist = it.artist, album = it.album) }
+                    ?: track
+            }.sortedBy { it.title.lowercase() }
+        }
+    }
+
+    // Плеер хранит название из момента постановки в очередь, поэтому подставляем правки сами.
+    val playerState: StateFlow<PlayerState> =
+        combine(playerConnection.state, trackEdits) { state, edits ->
+            val edit = state.mediaId?.toLongOrNull()?.let { edits[it] }
+            if (edit == null) state else state.copy(title = edit.title, artist = edit.artist, album = edit.album)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, playerConnection.state.value)
+
+    val queueState: StateFlow<QueueState> =
+        combine(playerConnection.queue, trackEdits) { queue, edits ->
+            if (edits.isEmpty()) {
+                queue
+            } else {
+                queue.copy(items = queue.items.map { item ->
+                    val edit = item.mediaId.toLongOrNull()?.let { edits[it] }
+                    if (edit == null) item else item.copy(title = edit.title, artist = edit.artist)
+                })
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, playerConnection.queue.value)
 
     private class Extras(
         val counts: Map<Long, Int>,
         val lastId: Long?,
         val favIds: Set<Long>,
-        val playlists: List<Playlist>
+        val playlists: List<Playlist>,
+        val editedIds: Set<Long>
     )
 
-    // Статистика, избранное и плейлисты собраны в один поток: combine принимает не больше пяти потоков.
-    private val extras = combine(playCounts, lastPlayedId, favoriteIds, playlists) { counts, lastId, favIds, lists ->
-        Extras(counts, lastId, favIds, lists)
+    // Статистика, избранное, плейлисты и правки собраны в один поток: combine принимает не больше пяти потоков.
+    private val extras = combine(
+        playCounts, lastPlayedId, favoriteIds, playlists, trackEdits
+    ) { counts, lastId, favIds, lists, edits ->
+        Extras(counts, lastId, favIds, lists, edits.keys)
     }
 
     val uiState: StateFlow<LibraryUiState> =
-        combine(allTracks, query, isLoading, extras) { all, q, loading, extra ->
+        combine(displayTracks, query, isLoading, extras) { all, q, loading, extra ->
             val counts = extra.counts
             val lastId = extra.lastId
             val favIds = extra.favIds
@@ -141,7 +184,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         coverTrackId = existing.firstOrNull()?.id
                     )
                 },
-                library = all
+                library = all,
+                editedIds = extra.editedIds
             )
         }
             .flowOn(Dispatchers.Default)
@@ -227,6 +271,93 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updatePlaylists { list ->
             list.map { if (it.id == playlistId) it.copy(trackIds = it.trackIds - trackId) else it }
         }
+    }
+
+    private fun updateEdits(transform: (Map<Long, TrackEdit>) -> Map<Long, TrackEdit>) {
+        val updated = transform(trackEdits.value)
+        trackEditStore.saveAll(updated)
+        trackEdits.value = updated
+    }
+
+    /** Сохраняет свои название, исполнителя и альбом трека. Пустое название не принимается. */
+    fun saveTrackEdit(trackId: Long, title: String, artist: String, album: String) {
+        val cleanTitle = title.trim().take(MaxTagLength)
+        if (cleanTitle.isEmpty()) return
+        val edit = TrackEdit(
+            title = cleanTitle,
+            artist = artist.trim().take(MaxTagLength).ifEmpty { "Неизвестный исполнитель" },
+            album = album.trim().take(MaxTagLength).ifEmpty { "Неизвестный альбом" }
+        )
+        updateEdits { it + (trackId to edit) }
+    }
+
+    /** Возвращает трек к данным из файла. */
+    fun resetTrackEdit(trackId: Long) {
+        updateEdits { it - trackId }
+    }
+
+    /** Запрос подтверждения у системы перед удалением файла. */
+    class DeleteRequest(
+        val track: Track,
+        val intentSender: IntentSender,
+        val deleteAfterConsent: Boolean
+    )
+
+    /**
+     * Удаляет файл трека с телефона. Если Android просит подтверждение, вызывается [onNeedsConsent]
+     * (окно нужно показать пользователю); если удалить не вышло, вызывается [onFailed].
+     */
+    fun deleteTrack(track: Track, onNeedsConsent: (DeleteRequest) -> Unit, onFailed: () -> Unit) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                TrackDeleter.delete(getApplication<Application>(), track.uri)
+            }
+            when (result) {
+                is TrackDeleter.Result.Deleted -> forgetTrack(track.id)
+                is TrackDeleter.Result.Failed -> onFailed()
+                is TrackDeleter.Result.NeedsConsent ->
+                    onNeedsConsent(DeleteRequest(track, result.intentSender, result.deleteAfterConsent))
+            }
+        }
+    }
+
+    /** Вызывается, когда пользователь нажал «Разрешить» в системном окне удаления. */
+    fun finishDeleteAfterConsent(request: DeleteRequest, onFailed: () -> Unit) {
+        if (!request.deleteAfterConsent) {
+            // Android 11+: файл уже удалён системой.
+            forgetTrack(request.track.id)
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                TrackDeleter.delete(getApplication<Application>(), request.track.uri)
+            }
+            if (result is TrackDeleter.Result.Deleted) forgetTrack(request.track.id) else onFailed()
+        }
+    }
+
+    /** Убирает удалённый трек отовсюду: из списка, очереди, избранного, плейлистов, статистики и правок. */
+    private fun forgetTrack(trackId: Long) {
+        allTracks.value = allTracks.value.filterNot { it.id == trackId }
+
+        playerConnection.removeFromQueue(trackId.toString())
+
+        if (trackId in favoriteIds.value) {
+            favoriteIds.value = favoritesStore.setFavorite(trackId, false)
+        }
+        if (playlists.value.any { trackId in it.trackIds }) {
+            updatePlaylists { list ->
+                list.map { if (trackId in it.trackIds) it.copy(trackIds = it.trackIds - trackId) else it }
+            }
+        }
+        playCountStore.forget(trackId)
+        playCounts.value = playCountStore.loadAll()
+        lastPlayedId.value = playCountStore.lastPlayedId()
+
+        if (trackId in trackEdits.value) resetTrackEdit(trackId)
+
+        // Сверяемся с MediaStore: библиотека должна совпадать с тем, что реально на телефоне.
+        loadTracks()
     }
 
     fun onQueryChange(newQuery: String) {

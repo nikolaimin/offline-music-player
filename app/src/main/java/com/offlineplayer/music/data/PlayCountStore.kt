@@ -31,6 +31,13 @@ class PlayCountStore(context: Context) {
         prefs.edit().putLong(KeyLastPlayed, trackId).apply()
     }
 
+    /** Забывает трек (например, после удаления файла): счётчик и отметку «играл последним». */
+    fun forget(trackId: Long) {
+        val editor = prefs.edit().remove(trackId.toString())
+        if (lastPlayedId() == trackId) editor.remove(KeyLastPlayed)
+        editor.apply()
+    }
+
     /** Добавляет одно прослушивание и возвращает новое значение. */
     fun increment(trackId: Long): Int {
         val key = trackId.toString()

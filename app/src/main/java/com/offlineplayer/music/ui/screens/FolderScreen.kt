@@ -45,6 +45,8 @@ fun FolderScreen(
     isPlaying: Boolean = false,
     onAddToPlaylist: ((Long) -> Unit)? = null,
     onRemoveFromPlaylist: ((Long) -> Unit)? = null,
+    onEditTrack: ((Track) -> Unit)? = null,
+    onDeleteTrack: ((Track) -> Unit)? = null,
     headerAction: (@Composable () -> Unit)? = null,
     onBack: (() -> Unit)? = null
 ) {
@@ -100,6 +102,8 @@ fun FolderScreen(
                             onToggleFavorite = { onToggleFavorite(track.id) },
                             onAddToPlaylist = onAddToPlaylist?.let { add -> { add(track.id) } },
                             onRemoveFromPlaylist = onRemoveFromPlaylist?.let { remove -> { remove(track.id) } },
+                            onEdit = onEditTrack?.let { edit -> { edit(track) } },
+                            onDelete = onDeleteTrack?.let { delete -> { delete(track) } },
                             onClick = { onTrackClick(track) }
                         )
                     }
