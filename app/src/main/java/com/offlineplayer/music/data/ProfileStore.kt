@@ -107,8 +107,9 @@ class ProfileStore(private val context: Context) {
         val resolver = context.contentResolver
 
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        // При inJustDecodeBounds decodeStream всегда возвращает null: размеры читаем из bounds.
+        val opened = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds); true }
+        if (opened != true || bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
         // Грубое уменьшение при чтении, чтобы не держать в памяти фото на десятки мегабайт.
         var sample = 1
