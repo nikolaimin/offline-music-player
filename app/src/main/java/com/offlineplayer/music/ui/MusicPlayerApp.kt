@@ -19,6 +19,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
@@ -60,13 +62,16 @@ import com.offlineplayer.music.ui.components.PlaylistNameDialog
 import com.offlineplayer.music.ui.components.SearchField
 import com.offlineplayer.music.ui.components.SectionTitle
 import com.offlineplayer.music.ui.components.TrackEditDialog
+import com.offlineplayer.music.ui.components.UserIcon
 import com.offlineplayer.music.ui.components.appBackground
+import com.offlineplayer.music.ui.profile.ProfileSidePanel
 import com.offlineplayer.music.ui.screens.FolderScreen
 import com.offlineplayer.music.ui.screens.HeaderPillButton
 import com.offlineplayer.music.ui.screens.LibraryScreen
 import com.offlineplayer.music.ui.screens.NowPlayingScreen
 import com.offlineplayer.music.ui.screens.PermissionScreen
 import com.offlineplayer.music.ui.screens.PlaylistsScreen
+import com.offlineplayer.music.ui.screens.ProfileScreen
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.Background
 import com.offlineplayer.music.ui.theme.CardColor
@@ -86,8 +91,12 @@ private sealed interface PlaylistNameTarget {
 private val tabs = listOf(
     Tab("Музыка", "♫"),
     Tab("Плейлисты", "☷"),
-    Tab("Избранное", "♥")
+    Tab("Избранное", "♥"),
+    Tab("Профиль", "")
 )
+
+/** Номер вкладки «Профиль» (последняя). */
+private const val ProfileTab = 3
 
 @Composable
 fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
@@ -108,6 +117,8 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     var editTarget by remember { mutableStateOf<Track?>(null) }
     var deleteTrackTarget by remember { mutableStateOf<Track?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
+    val profile by viewModel.profile.collectAsStateWithLifecycle()
+    var profileMenuOpen by rememberSaveable { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
     var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
     var askedForNotifications by rememberSaveable { mutableStateOf(false) }
@@ -231,6 +242,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         openPlaylistId = null
     }
 
+    // «Назад» закрывает боковую панель профиля.
+    BackHandler(enabled = profileMenuOpen && !playerVisible) { profileMenuOpen = false }
+
     Box(modifier = Modifier.fillMaxSize()) {
 
     Scaffold(
@@ -250,7 +264,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                         NavigationBarItem(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
-                            icon = { Text(tab.icon, fontSize = 20.sp) },
+                            icon = {
+                                if (index == ProfileTab) UserIcon() else Text(tab.icon, fontSize = 20.sp)
+                            },
                             label = { Text(tab.title) }
                         )
                     }
@@ -268,36 +284,45 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         ) {
             Spacer(modifier = Modifier.height(28.dp))
 
-            Text(
-                text = "OFFLINE PLAYER",
-                color = Accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
+            // На вкладке «Профиль» общий заголовок и поиск скрыты: у неё своя шапка.
+            AnimatedVisibility(
+                visible = selectedTab != ProfileTab,
+                enter = fadeIn(tween(TabAnimationMs)) + expandVertically(tween(TabAnimationMs)),
+                exit = fadeOut(tween(TabAnimationMs)) + shrinkVertically(tween(TabAnimationMs))
+            ) {
+                Column {
+                    Text(
+                        text = "OFFLINE PLAYER",
+                        color = Accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp
+                    )
 
-            Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = tabs[selectedTab].title,
-                color = Color.White,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold
-            )
+                    Text(
+                        text = tabs[selectedTab].title,
+                        color = Color.White,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold
+                    )
 
-            Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-            SearchField(
-                value = searchText,
-                onValueChange = {
-                    searchText = it
-                    viewModel.onQueryChange(it)
+                    SearchField(
+                        value = searchText,
+                        onValueChange = {
+                            searchText = it
+                            viewModel.onQueryChange(it)
+                        }
+                    )
+
+                    // Отступ под поиском. Вместе с отступом внутри списка даёт прежний
+                    // зазор до заголовка, а при прокрутке треки уходят под строку поиска.
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-            )
-
-            // Отступ под поиском. Вместе с отступом внутри списка даёт прежний
-            // зазор до заголовка, а при прокрутке треки уходят под строку поиска.
-            Spacer(modifier = Modifier.height(16.dp))
+            }
 
             AnimatedContent(
                 targetState = selectedTab,
@@ -425,6 +450,11 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                         }
                     }
 
+                    ProfileTab -> ProfileScreen(
+                        profile = profile,
+                        onOpenMenu = { profileMenuOpen = true }
+                    )
+
                     else -> FolderScreen(
                         title = "Любимые композиции",
                         tracks = uiState.favorites,
@@ -451,6 +481,20 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
             }
         }
     }
+
+    // Боковая панель редактирования профиля: поверх вкладок, под экраном плеера.
+    ProfileSidePanel(
+        visible = profileMenuOpen && selectedTab == ProfileTab,
+        profile = profile,
+        onClose = { profileMenuOpen = false },
+        onSave = viewModel::saveProfile,
+        onPhotoPicked = { uri ->
+            viewModel.setAvatar(uri) {
+                Toast.makeText(context, "Не удалось загрузить фото", Toast.LENGTH_SHORT).show()
+            }
+        },
+        onRemovePhoto = viewModel::removeAvatar
+    )
 
     AnimatedVisibility(
         visible = playerVisible,

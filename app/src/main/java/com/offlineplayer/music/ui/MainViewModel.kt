@@ -2,6 +2,7 @@ package com.offlineplayer.music.ui
 
 import android.app.Application
 import android.content.IntentSender
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.offlineplayer.music.data.FavoritesStore
@@ -9,6 +10,8 @@ import com.offlineplayer.music.data.MusicRepository
 import com.offlineplayer.music.data.PlayCountStore
 import com.offlineplayer.music.data.Playlist
 import com.offlineplayer.music.data.PlaylistStore
+import com.offlineplayer.music.data.Profile
+import com.offlineplayer.music.data.ProfileStore
 import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.data.TrackDeleter
 import com.offlineplayer.music.data.TrackEdit
@@ -94,6 +97,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val playlists = MutableStateFlow(playlistStore.loadAll())
     private val trackEditStore = TrackEditStore(application.applicationContext)
     private val trackEdits = MutableStateFlow(trackEditStore.loadAll())
+
+    private val profileStore = ProfileStore(application.applicationContext)
+    private val _profile = MutableStateFlow(profileStore.load())
+    val profile: StateFlow<Profile> = _profile
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
@@ -218,6 +225,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         playCounts.value = playCountStore.loadAll()
                     }
                 }
+        }
+    }
+
+    /** Сохраняет имя, имя пользователя и статус профиля. */
+    fun saveProfile(name: String, username: String, status: String) {
+        _profile.value = profileStore.save(name, username, status)
+    }
+
+    /** Ставит выбранную картинку аватаром; если прочитать её не вышло, вызывается [onFailed]. */
+    fun setAvatar(uri: Uri, onFailed: () -> Unit) {
+        viewModelScope.launch {
+            val updated = withContext(Dispatchers.IO) { profileStore.saveAvatarFrom(uri) }
+            if (updated != null) _profile.value = updated else onFailed()
+        }
+    }
+
+    fun removeAvatar() {
+        viewModelScope.launch {
+            _profile.value = withContext(Dispatchers.IO) { profileStore.removeAvatar() }
         }
     }
 
