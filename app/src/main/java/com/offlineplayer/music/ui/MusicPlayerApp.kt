@@ -302,13 +302,15 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                 .fillMaxSize()
                 .appBackground()
                 .padding(padding)
-                .padding(horizontal = 20.dp)
+                // Правый отступ у каждого экрана свой: ползунок списков стоит в правом поле, у края.
+                .padding(start = 20.dp)
         ) {
             Spacer(modifier = Modifier.height(28.dp))
 
             // На вкладке «Профиль» общий заголовок и поиск скрыты: у неё своя шапка.
             AnimatedVisibility(
                 visible = selectedTab != ProfileTab,
+                modifier = Modifier.padding(end = 20.dp),
                 enter = fadeIn(tween(TabAnimationMs)) + expandVertically(tween(TabAnimationMs)),
                 exit = fadeOut(tween(TabAnimationMs)) + shrinkVertically(tween(TabAnimationMs))
             ) {
@@ -443,7 +445,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                             )
                         }
                     } else {
-                        Column {
+                        Column(modifier = Modifier.padding(end = 20.dp)) {
                             Spacer(modifier = Modifier.height(10.dp))
                             SectionTitle("Ваша библиотека")
                             PermissionScreen(

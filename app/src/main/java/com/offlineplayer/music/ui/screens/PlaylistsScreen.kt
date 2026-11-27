@@ -68,7 +68,7 @@ fun PlaylistsScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(end = 20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             SectionTitle("Ваши подборки · ${playlists.size}")
@@ -79,7 +79,9 @@ fun PlaylistsScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         if (playlists.isEmpty()) {
-            EmptyState("Плейлистов пока нет. Нажмите «＋ Создать»")
+            Box(modifier = Modifier.padding(end = 20.dp)) {
+                EmptyState("Плейлистов пока нет. Нажмите «＋ Создать»")
+            }
         } else {
             val listState = rememberLazyListState()
 
@@ -87,8 +89,8 @@ fun PlaylistsScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    // Справа оставляем место под ползунок.
-                    contentPadding = PaddingValues(end = 22.dp, bottom = 16.dp),
+                    // Правое поле экрана, как слева; ползунок стоит в нём у самого края.
+                    contentPadding = PaddingValues(end = 20.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(playlists, key = { it.id }) { playlist ->

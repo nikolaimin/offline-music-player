@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,7 +55,7 @@ fun FolderScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(end = 20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (onBack != null) {
@@ -78,7 +79,7 @@ fun FolderScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         if (tracks.isEmpty()) {
-            EmptyState(emptyText)
+            Box(modifier = Modifier.padding(end = 20.dp)) { EmptyState(emptyText) }
         } else {
             val listState = rememberLazyListState()
 
@@ -86,8 +87,8 @@ fun FolderScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    // Справа оставляем место под ползунок.
-                    contentPadding = PaddingValues(end = 22.dp, bottom = 16.dp),
+                    // Правое поле экрана, как слева; ползунок стоит в нём у самого края.
+                    contentPadding = PaddingValues(end = 20.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(tracks, key = { it.id }) { track ->

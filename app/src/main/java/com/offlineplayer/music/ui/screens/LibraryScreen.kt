@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -48,8 +49,8 @@ fun LibraryScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                // Справа оставляем место под ползунок, чтобы он не заходил на карточки.
-                contentPadding = PaddingValues(top = 10.dp, end = 22.dp, bottom = 16.dp),
+                // Правое поле экрана, как слева; ползунок стоит в нём у самого края.
+                contentPadding = PaddingValues(top = 10.dp, end = 20.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Две папки рядом; при поиске скрыты.
@@ -92,7 +93,7 @@ fun LibraryScreen(
             )
         }
     } else {
-        Column {
+        Column(modifier = Modifier.padding(end = 20.dp)) {
             Spacer(modifier = Modifier.height(10.dp))
             SectionTitle(title)
             Spacer(modifier = Modifier.height(14.dp))
