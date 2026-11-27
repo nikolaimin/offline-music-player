@@ -109,18 +109,18 @@ fun TrackCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .drawBehind { drawCardBackground(active) }
+            .drawBehind { drawFlatCardBackground(active) }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TrackCover(trackId = trackId, size = 68.dp)
+        TrackCover(trackId = trackId, size = 56.dp)
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -140,13 +140,13 @@ fun TrackCard(
                     color = Color.White,
                     fontFamily = TrackTitleFont,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = subtitle,
                 color = SecondaryText,
@@ -163,7 +163,7 @@ fun TrackCard(
         Box {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .clickable { menuOpen = true },
                 contentAlignment = Alignment.Center
@@ -250,6 +250,26 @@ internal fun MoreDots(color: Color) {
         listOf(radius, size.height / 2f, size.height - radius).forEach { centerY ->
             drawCircle(color = color, radius = radius, center = Offset(size.width / 2f, centerY))
         }
+    }
+}
+
+// Плоские карточки списков треков: однотонный фон без стекла, градиента и свечения.
+private val FlatCorner = 18.dp
+private val FlatColor = Color(0xFF1D1D25)
+private val FlatActiveColor = Color(0xFF2E2350)
+private val FlatActiveBorder = Color(0xFFB69CFF)
+
+/** Плоский фон карточки трека. [active] от 0 до 1 плавно выделяет играющий трек. */
+internal fun DrawScope.drawFlatCardBackground(active: Float) {
+    val radius = CornerRadius(FlatCorner.toPx())
+    drawRoundRect(color = lerp(FlatColor, FlatActiveColor, active), cornerRadius = radius)
+    if (active > 0f) {
+        drawRoundRect(
+            color = FlatActiveBorder,
+            cornerRadius = radius,
+            style = Stroke(width = 1.dp.toPx()),
+            alpha = 0.7f * active
+        )
     }
 }
 

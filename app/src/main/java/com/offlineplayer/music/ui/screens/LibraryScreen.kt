@@ -50,7 +50,7 @@ fun LibraryScreen(
                 modifier = Modifier.fillMaxSize(),
                 // Справа оставляем место под ползунок, чтобы он не заходил на карточки.
                 contentPadding = PaddingValues(top = 10.dp, end = 22.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Две папки рядом; при поиске скрыты.
                 if (!hasQuery) {
