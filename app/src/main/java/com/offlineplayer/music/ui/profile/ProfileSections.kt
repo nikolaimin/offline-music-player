@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -26,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,27 +55,24 @@ private val AchievementGradient = Brush.linearGradient(listOf(Color(0xFFD2C2FF),
 
 /**
  * Блоки профиля под шапкой: статистика, топ-5, любимые исполнитель и альбом, история, достижения.
+ * Каждый блок отдельный элемент списка, поэтому экран листается и работает с ползунком прокрутки.
  * Блоки плавно появляются по очереди.
  */
-@Composable
-fun ProfileSections(
+fun LazyListScope.profileSections(
     details: ProfileDetails,
-    onPlay: (List<Track>, Track) -> Unit,
-    modifier: Modifier = Modifier
+    onPlay: (List<Track>, Track) -> Unit
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(26.dp)) {
-        Appear(0) { StatsSection(details.stats) }
-        Appear(1) { TopTracksSection(details.topTracks, onPlay) }
-        Appear(2) { FavoritesSection(details.favoriteArtist, details.favoriteAlbum) }
-        Appear(3) { RecentSection(details.recent, onPlay) }
-        Appear(4) { AchievementsSection(details.achievements) }
-    }
+    item(key = "stats") { Appear(0) { StatsSection(details.stats) } }
+    item(key = "top") { Appear(1) { TopTracksSection(details.topTracks, onPlay) } }
+    item(key = "favorites") { Appear(2) { FavoritesSection(details.favoriteArtist, details.favoriteAlbum) } }
+    item(key = "recent") { Appear(3) { RecentSection(details.recent, onPlay) } }
+    item(key = "achievements") { Appear(4) { AchievementsSection(details.achievements) } }
 }
 
 /** Плавное появление блока (прозрачность и лёгкий подъём) с задержкой по номеру блока. */
 @Composable
 private fun Appear(index: Int, content: @Composable () -> Unit) {
-    var shown by remember { mutableStateOf(false) }
+    var shown by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(index * 70L)
         shown = true
@@ -139,7 +138,7 @@ private fun StatsSection(stats: ProfileStats) {
 @Composable
 private fun StatCard(icon: String, value: Int, label: String, modifier: Modifier = Modifier) {
     // Число «досчитывается» от нуля до значения.
-    var shown by remember { mutableStateOf(false) }
+    var shown by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(value) { shown = true }
     val shownValue by animateIntAsState(
         targetValue = if (shown) value else 0,
