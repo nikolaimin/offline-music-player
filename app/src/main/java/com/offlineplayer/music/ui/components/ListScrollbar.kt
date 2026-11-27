@@ -1,5 +1,6 @@
 package com.offlineplayer.music.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -27,6 +28,7 @@ import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.CardColor
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -94,17 +96,17 @@ fun ListScrollbar(
             dragging -> 1f
             else -> 0.85f
         },
-        animationSpec = tween(durationMillis = if (visible) 150 else 400),
+        animationSpec = tween(durationMillis = if (visible) 350 else 700, easing = FastOutSlowInEasing),
         label = "scrollbarAlpha"
     )
     val trackAlpha by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(durationMillis = if (visible) 150 else 400),
+        animationSpec = tween(durationMillis = if (visible) 350 else 700, easing = FastOutSlowInEasing),
         label = "scrollbarTrackAlpha"
     )
     val widthAnim by animateFloatAsState(
         targetValue = if (dragging) 1f else 0f,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
         label = "scrollbarWidth"
     )
 
@@ -115,11 +117,22 @@ fun ListScrollbar(
     // Если весь список помещается на экране, ползунок не нужен.
     if (visibleFraction >= 1f) return
 
+    // Предыдущая перемотка отменяется новой, чтобы при быстром движении пальца
+    // не копилась очередь и список не отставал от ползунка.
+    var scrollJob by remember { mutableStateOf<Job?>(null) }
+
     fun scrollToProgress(progress: Float) {
         val info = state.layoutInfo
-        val maxFirst = (info.totalItemsCount - info.visibleItemsInfo.size).coerceAtLeast(0)
-        val target = (progress * maxFirst).roundToInt().coerceIn(0, maxFirst)
-        scope.launch { state.scrollToItem(target) }
+        val visible = info.visibleItemsInfo
+        val maxFirst = (info.totalItemsCount - visible.size).coerceAtLeast(0)
+        // Позиция дробная: целая часть — номер карточки, дробная — сдвиг внутри неё.
+        // Так список едет плавно, а не прыгает сразу на целую карточку.
+        val position = (progress * maxFirst).coerceIn(0f, maxFirst.toFloat())
+        val index = position.toInt()
+        val itemSize = if (visible.isEmpty()) 0 else visible.sumOf { it.size } / visible.size
+        val offset = ((position - index) * itemSize).roundToInt()
+        scrollJob?.cancel()
+        scrollJob = scope.launch { state.scrollToItem(index, offset) }
     }
 
     fun progressFor(y: Float): Float {
