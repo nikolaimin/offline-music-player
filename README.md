@@ -1,4 +1,4 @@
-# Offline Music Player
+# Planix
 
 A modern Android offline music player.
 

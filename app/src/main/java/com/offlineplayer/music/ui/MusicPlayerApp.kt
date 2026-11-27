@@ -316,7 +316,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "OFFLINE PLAYER",
+                                text = "PLANIX",
                                 color = Accent,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
