@@ -128,6 +128,7 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     var deleteTrackTarget by remember { mutableStateOf<Track?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
     val profile by viewModel.profile.collectAsStateWithLifecycle()
+    val profileDetails by viewModel.profileDetails.collectAsStateWithLifecycle()
     var profileMenuOpen by rememberSaveable { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(searchText.isNotEmpty()) }
@@ -503,7 +504,12 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
 
                     ProfileTab -> ProfileScreen(
                         profile = profile,
-                        onOpenMenu = { profileMenuOpen = true }
+                        onOpenMenu = { profileMenuOpen = true },
+                        details = profileDetails,
+                        onPlayTrack = { list, track ->
+                            // Очередь = список, из которого выбран трек.
+                            startAfterNotificationPrompt { viewModel.playTrackFrom(list, track) }
+                        }
                     )
 
                     else -> FolderScreen(

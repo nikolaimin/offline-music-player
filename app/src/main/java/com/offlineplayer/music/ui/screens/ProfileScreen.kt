@@ -26,8 +26,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.offlineplayer.music.data.Profile
+import com.offlineplayer.music.data.Track
 import com.offlineplayer.music.ui.components.MenuIcon
 import com.offlineplayer.music.ui.components.UserAvatar
+import com.offlineplayer.music.ui.profile.ProfileDetails
+import com.offlineplayer.music.ui.profile.ProfileSections
 import com.offlineplayer.music.ui.profile.glassSurface
 import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.SecondaryText
@@ -39,7 +42,9 @@ import com.offlineplayer.music.ui.theme.SecondaryText
 @Composable
 fun ProfileScreen(
     profile: Profile,
-    onOpenMenu: () -> Unit
+    onOpenMenu: () -> Unit,
+    details: ProfileDetails = ProfileDetails(),
+    onPlayTrack: (List<Track>, Track) -> Unit = { _, _ -> }
 ) {
     Column(
         modifier = Modifier
@@ -123,5 +128,10 @@ fun ProfileScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Статистика, топ-5, любимые исполнитель и альбом, история и достижения.
+        ProfileSections(details = details, onPlay = onPlayTrack)
     }
 }

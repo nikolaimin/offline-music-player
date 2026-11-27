@@ -5,9 +5,11 @@ import android.content.IntentSender
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.offlineplayer.music.data.AchievementStore
 import com.offlineplayer.music.data.FavoritesStore
 import com.offlineplayer.music.data.MusicRepository
 import com.offlineplayer.music.data.PlayCountStore
+import com.offlineplayer.music.data.PlayHistoryStore
 import com.offlineplayer.music.data.Playlist
 import com.offlineplayer.music.data.PlaylistStore
 import com.offlineplayer.music.data.Profile
@@ -19,6 +21,9 @@ import com.offlineplayer.music.data.TrackEditStore
 import com.offlineplayer.music.playback.PlayerConnection
 import com.offlineplayer.music.playback.PlayerState
 import com.offlineplayer.music.playback.QueueState
+import com.offlineplayer.music.ui.profile.Achievement
+import com.offlineplayer.music.ui.profile.ProfileDetails
+import com.offlineplayer.music.ui.profile.buildProfileDetails
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -101,6 +106,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val profileStore = ProfileStore(application.applicationContext)
     private val _profile = MutableStateFlow(profileStore.load())
     val profile: StateFlow<Profile> = _profile
+
+    // История прослушиваний, общее число прослушиваний и полученные достижения профиля.
+    private val playHistoryStore = PlayHistoryStore(application.applicationContext)
+    private val playHistory = MutableStateFlow(playHistoryStore.loadAll())
+    private val totalPlays = MutableStateFlow(playHistoryStore.totalPlays())
+    private val achievementStore = AchievementStore(application.applicationContext)
+    private val unlockedAchievements = MutableStateFlow(achievementStore.loadAll())
 
     private val allTracks = MutableStateFlow<List<Track>>(emptyList())
     private val query = MutableStateFlow("")
@@ -198,6 +210,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
+    // Данные экрана профиля: статистика, топ-5, любимые исполнитель и альбом, история, достижения.
+    val profileDetails: StateFlow<ProfileDetails> =
+        combine(uiState, playCounts, totalPlays, playHistory, unlockedAchievements) { ui, counts, total, history, unlocked ->
+            buildProfileDetails(
+                library = ui.library,
+                counts = counts,
+                totalPlays = total,
+                favoriteCount = ui.favoriteIds.size,
+                playlistCount = ui.playlists.size,
+                history = history,
+                unlocked = unlocked
+            )
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileDetails())
+
+    init {
+        // Достижение отмечается полученным, когда выполнено условие, и остаётся полученным навсегда,
+        // даже если число потом уменьшится (например, плейлист удалили).
+        viewModelScope.launch {
+            profileDetails
+                .map { it.stats }
+                .distinctUntilChanged()
+                .collect { stats ->
+                    val reached = Achievement.entries
+                        .filter { it.isReached(stats) && it.id !in unlockedAchievements.value }
+                        .map { it.id }
+                    if (reached.isNotEmpty()) {
+                        unlockedAchievements.value =
+                            achievementStore.unlock(reached, System.currentTimeMillis())
+                    }
+                }
+        }
+    }
+
     init {
         // Прослушивание засчитывается, когда трек непрерывно играет ListenThresholdMs.
         // Пауза до этого момента сбрасывает отсчёт; один и тот же трек за раз считается один раз.
@@ -223,6 +270,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         counted = true
                         playCountStore.increment(trackId)
                         playCounts.value = playCountStore.loadAll()
+                        // Та же засчитанная запись идёт в историю и в общее число для профиля.
+                        playHistoryStore.recordPlay(trackId, System.currentTimeMillis())
+                        playHistory.value = playHistoryStore.loadAll()
+                        totalPlays.value = playHistoryStore.totalPlays()
                     }
                 }
         }
@@ -378,6 +429,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         playCountStore.forget(trackId)
         playCounts.value = playCountStore.loadAll()
+        playHistoryStore.forgetTrack(trackId)
+        playHistory.value = playHistoryStore.loadAll()
         lastPlayedId.value = playCountStore.lastPlayedId()
 
         if (trackId in trackEdits.value) resetTrackEdit(trackId)
