@@ -177,7 +177,7 @@ fun ListScrollbar(
                 val trackW = TrackWidth.toPx()
                 val thumbW = TrackWidth.toPx() +
                     (ThumbWidth.toPx() - TrackWidth.toPx()) * widthAnim
-                val right = size.width - 2.dp.toPx()
+                val right = size.width - 3.dp.toPx()
 
                 // Тонкая дорожка
                 drawRoundRect(

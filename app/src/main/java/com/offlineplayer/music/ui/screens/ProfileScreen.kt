@@ -50,12 +50,12 @@ fun ProfileScreen(
 ) {
     val listState = rememberLazyListState()
 
-    // Как в списках треков: справа оставляем место под ползунок прокрутки.
+    // Как в списках треков: правое поле 20 dp, ползунок стоит в нём у самого края экрана.
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(end = 22.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(end = 20.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(26.dp)
         ) {
             item(key = "header") {
