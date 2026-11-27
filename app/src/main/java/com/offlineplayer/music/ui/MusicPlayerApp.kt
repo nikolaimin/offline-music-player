@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,8 +25,13 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -42,6 +48,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +69,7 @@ import com.offlineplayer.music.ui.components.PickTracksDialog
 import com.offlineplayer.music.ui.components.PlaylistConfirmDialog
 import com.offlineplayer.music.ui.components.PlaylistNameDialog
 import com.offlineplayer.music.ui.components.SearchField
+import com.offlineplayer.music.ui.components.SearchIcon
 import com.offlineplayer.music.ui.components.SectionTitle
 import com.offlineplayer.music.ui.components.TrackEditDialog
 import com.offlineplayer.music.ui.components.UserIcon
@@ -120,6 +130,15 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
     val profile by viewModel.profile.collectAsStateWithLifecycle()
     var profileMenuOpen by rememberSaveable { mutableStateOf(false) }
     var searchText by remember { mutableStateOf("") }
+    var searchOpen by rememberSaveable { mutableStateOf(searchText.isNotEmpty()) }
+    val focusManager = LocalFocusManager.current
+    // Сворачивает поле поиска и сбрасывает запрос: библиотека снова показывает все треки.
+    val closeSearch: () -> Unit = {
+        focusManager.clearFocus()
+        searchOpen = false
+        searchText = ""
+        viewModel.onQueryChange("")
+    }
     var hasPermission by remember { mutableStateOf(hasAudioPermission(context)) }
     var askedForNotifications by rememberSaveable { mutableStateOf(false) }
 
@@ -242,6 +261,9 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
         openPlaylistId = null
     }
 
+    // «Назад» сворачивает поиск.
+    BackHandler(enabled = searchOpen && !playerVisible) { closeSearch() }
+
     // «Назад» закрывает боковую панель профиля.
     BackHandler(enabled = profileMenuOpen && !playerVisible) { profileMenuOpen = false }
 
@@ -291,35 +313,64 @@ fun MusicPlayerApp(viewModel: MainViewModel = viewModel()) {
                 exit = fadeOut(tween(TabAnimationMs)) + shrinkVertically(tween(TabAnimationMs))
             ) {
                 Column {
-                    Text(
-                        text = "OFFLINE PLAYER",
-                        color = Accent,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "OFFLINE PLAYER",
+                                color = Accent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 2.sp
+                            )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(
-                        text = tabs[selectedTab].title,
-                        color = Color.White,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    SearchField(
-                        value = searchText,
-                        onValueChange = {
-                            searchText = it
-                            viewModel.onQueryChange(it)
+                            Text(
+                                text = tabs[selectedTab].title,
+                                color = Color.White,
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                    )
 
-                    // Отступ под поиском. Вместе с отступом внутри списка даёт прежний
-                    // зазор до заголовка, а при прокрутке треки уходят под строку поиска.
+                        // Лупа: нажатие раскрывает поле поиска, повторное нажатие сворачивает.
+                        val lupaTint by animateColorAsState(
+                            targetValue = if (searchOpen) Accent else Color.White,
+                            animationSpec = tween(250),
+                            label = "searchTint"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(CardColor)
+                                .clickable { if (searchOpen) closeSearch() else searchOpen = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SearchIcon(color = lupaTint, size = 24.dp)
+                        }
+                    }
+
+                    // Поле поиска выезжает под заголовком.
+                    AnimatedVisibility(
+                        visible = searchOpen,
+                        enter = fadeIn(tween(250)) + expandVertically(tween(300)),
+                        exit = fadeOut(tween(200)) + shrinkVertically(tween(250))
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            SearchField(
+                                value = searchText,
+                                onValueChange = {
+                                    searchText = it
+                                    viewModel.onQueryChange(it)
+                                },
+                                onClose = closeSearch
+                            )
+                        }
+                    }
+
+                    // Отступ под шапкой: при прокрутке треки уходят под неё.
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
