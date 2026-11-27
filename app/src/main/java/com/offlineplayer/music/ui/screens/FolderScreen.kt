@@ -88,7 +88,7 @@ fun FolderScreen(
                     modifier = Modifier.fillMaxSize(),
                     // Справа оставляем место под ползунок.
                     contentPadding = PaddingValues(end = 22.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(tracks, key = { it.id }) { track ->
                         TrackCard(
