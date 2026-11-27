@@ -45,7 +45,8 @@ fun TrackCover(
     trackId: Long,
     size: Dp,
     modifier: Modifier = Modifier,
-    showArtwork: Boolean = true
+    showArtwork: Boolean = true,
+    corner: Dp = 16.dp
 ) {
     val context = LocalContext.current
 
@@ -78,7 +79,7 @@ fun TrackCover(
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(corner))
     ) {
         GeneratedCover(trackId = trackId, modifier = Modifier.fillMaxSize())
 

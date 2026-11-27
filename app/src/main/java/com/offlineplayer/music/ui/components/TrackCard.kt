@@ -118,7 +118,7 @@ fun TrackCard(
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TrackCover(trackId = trackId, size = 56.dp)
+        TrackCover(trackId = trackId, size = 56.dp, corner = 7.dp)
 
         Spacer(modifier = Modifier.width(12.dp))
 
@@ -174,7 +174,7 @@ fun TrackCard(
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 containerColor = MenuColor
             ) {
                 DropdownMenuItem(
@@ -254,7 +254,7 @@ internal fun MoreDots(color: Color) {
 }
 
 // Плоские карточки списков треков: однотонный фон без стекла, градиента и свечения.
-private val FlatCorner = 18.dp
+private val FlatCorner = 10.dp
 private val FlatColor = Color(0xFF1D1D25)
 private val FlatActiveColor = Color(0xFF2E2350)
 private val FlatActiveBorder = Color(0xFFB69CFF)
