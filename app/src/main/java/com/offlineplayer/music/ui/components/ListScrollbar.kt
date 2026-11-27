@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -26,12 +27,16 @@ import com.offlineplayer.music.ui.theme.Accent
 import com.offlineplayer.music.ui.theme.CardColor
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val TouchWidth = 20.dp
 private val TrackWidth = 4.dp
 private val ThumbWidth = 6.dp
 private val MinThumbHeight = 48.dp
+
+/** Через сколько миллисекунд после остановки прокрутки ползунок начинает гаснуть. */
+private const val HideDelayMs = 1000L
 
 /**
  * Ползунок прокрутки для [LazyListState]: показывает положение в списке
@@ -71,14 +76,31 @@ fun ListScrollbar(
         }
     }
 
+    // Ползунок виден, пока список листают или тянут за ползунок, и гаснет через
+    // HideDelayMs после остановки.
+    var visible by remember { mutableStateOf(false) }
+    val active = dragging || state.isScrollInProgress
+    LaunchedEffect(active) {
+        if (active) {
+            visible = true
+        } else {
+            delay(HideDelayMs)
+            visible = false
+        }
+    }
     val alpha by animateFloatAsState(
         targetValue = when {
+            !visible -> 0f
             dragging -> 1f
-            state.isScrollInProgress -> 0.85f
-            else -> 0.4f
+            else -> 0.85f
         },
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = tween(durationMillis = if (visible) 150 else 400),
         label = "scrollbarAlpha"
+    )
+    val trackAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = if (visible) 150 else 400),
+        label = "scrollbarTrackAlpha"
     )
     val widthAnim by animateFloatAsState(
         targetValue = if (dragging) 1f else 0f,
@@ -141,7 +163,7 @@ fun ListScrollbar(
 
                 // Тонкая дорожка
                 drawRoundRect(
-                    color = CardColor,
+                    color = CardColor.copy(alpha = trackAlpha),
                     topLeft = Offset(right - trackW, 0f),
                     size = Size(trackW, size.height),
                     cornerRadius = CornerRadius(trackW / 2f)
